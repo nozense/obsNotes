@@ -2,6 +2,11 @@
 obsNotes
 ########
 
+.. warning::
+    This script "works" but is not tested or complete!
+
+    **Do not run** this script without reading and understanding code!
+
 A simple script to handle a sqlight database file to store notes and a journal.
 
 obsNotes
@@ -14,7 +19,7 @@ What is it?
 The script lets you write to a sqlite database from a cli-menu and your favorite editor.
 
 
-First run: (edit settings besfore this!)
+First run: (edit settings before this!)
     - The script will create a folder-structure in the same folder as obsN.py
     - The script will create a sqlite file and add a first entry.
 
@@ -50,10 +55,14 @@ TODO
 +=============================+========+=======+
 | Replace pytz                |  5     |  no   |
 +-----------------------------+--------+-------+
-| Make a better               |  1     |  no   |
+| Add timezone setting        |  5     |  no   |
++-----------------------------+--------+-------+
+| Better                      |  1     |  no   |
 | printout function           |        |       |
 +-----------------------------+--------+-------+
-| Make menu faster/cleaner    |  2     |  no   |
+| Faster/cleaner Menu         |  2     |  no   |
 +-----------------------------+--------+-------+
 | Make the logging logical    |  2     |  no   |
++-----------------------------+--------+-------+
+| Search function             |  2     |  no   |
 +-----------------------------+--------+-------+
