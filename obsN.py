@@ -206,8 +206,8 @@ def write_file(file):
     chapter = metadata.get('Chapter')
     part = metadata.get('Part')
     date = metadata.get('Date')
-    tags = metadata.get('Tags')  
-    time = '13:37' 
+    tags = metadata.get('Tags')
+    time = "13:37:00"
     logging.debug(f"write_file() sent found data to write_any() - ({post.metadata}) - ({post.content})")
     write_any(book, chapter, part, date, time, tags, content)
     os.remove(file)
@@ -376,7 +376,7 @@ def find_old_daily():
                 os.remove(file)
                 logging.debug(f"find_old_daily() found {file} to be empty and deleted it.")
             else:
-                write_file(file) 
+                write_file(file)
                 logging.debug(f"find_old_daily() found {file} with {file_date} NOT ({now_date}) wrote it to the DB.")
         else:
             logging.debug(f"find_old_daily() found {file} {file_date} = today ({now_date}) did NOT write it to the DB.")
@@ -398,35 +398,90 @@ def open_today():
     logging.debug(f"open_today() ran run_daily  -> then '{editor} {path}'")
 
 
-def print_nice(cursor, data=None, rowlens=0):
-    """Stolen print function for DB cursor - should replace with a function of my own creation!!!"""
-    d = cursor.description
-    if not d:
-        return "#### NO RESULTS ###"
-    names = []
-    lengths = []
-    rules = []
-    if not data:
-        data = cursor.fetchall()
-    for dd in d:    # iterate over description
-        p = dd[1]
-        if not p:
-            p = 12             # or default arg ...
-        p = max(p, len(dd[0]))  # Handle long names
-        names.append(dd[0])
-        lengths.append(p)
-    for col in range(len(lengths)):
-        if rowlens:
-            rls = [len(row[col]) for row in data if row[col]]
-            lengths[col] = max([lengths[col]]+rls)
-        rules.append("-"*lengths[col])
-    formats = " ".join(["%%-%ss" % p for p in lengths])
-    result = [formats % tuple(names)]
-    result.append(formats % tuple(rules))
-    for row in data:
-        result.append(formats % row)
-    return "\n".join(result)
-        
+def print_nice(cursor, choice):
+    """Print function with two different ways to print:
+     * `full` gives a full recount of all the information in given cursor
+     * `short` just gives some information and chopped in length - in a table
+    """
+    data = cursor
+    result = ""
+    match choice:
+        case "full":
+            for row in data:
+                result += (f"""
+    iD: {row[0]}
+    Book: {row[1]}
+    Chapter: {row[2]}
+    Part: {row[3]}
+    Date: {row[4]}
+    Time: {row[5]}
+    Tags: {row[6]}
+
+        {row[7]}
+                
+    ============================
+                
+                """)
+            return result
+
+        case "short":
+            len_id = 5
+            len_date = 10
+            len_time = 8
+            len_tags = 20
+            len_note = 35
+            lines = []
+            for row in data:
+                if row[6]:
+                    tagses = row[6].split(";")
+                else:
+                    tagses = []
+                tags = ""
+                for tag in tagses:
+                    if len(tag) > 1:
+                        tag = f"#{tag}"
+                        tags += f"{tag} "
+                note = row[7]
+                note = (note[:30] + '[...]') if len(note) > 30 else note
+                tags = (tags[:30] + '[...]') if len(tags) > 30 else tags
+                the_id = row[0]
+                the_date = row[4]
+                the_time = row[5]
+                line = ""
+                line += f"| {the_id} "
+                for i in range(len_id - len(str(the_id))):
+                    line += " "
+                line += f"| {the_date} | {the_time} "
+                line += f"| {tags} "
+                for i in range(len_tags - len(tags)):
+                    line += " "
+                line += f"| {note} "
+                for i in range(len_note - len(note)):
+                    line += " "
+                line += "|\n"
+                lines.append(line)
+            devider = "+-"
+            for i in range(len_id):
+                devider += "-"
+            devider += "-+-"
+            for i in range(len_date):
+                devider += "-"
+            devider += "-+-"
+            for i in range(len_time):
+                devider += "-"
+            devider += "-+-"
+            for i in range(len_tags):
+                devider += "-"
+            devider += "-+-"
+            for i in range(len_note):
+                devider += "-"
+            devider += "-+\n"
+            result += devider
+            for line in lines:
+                result += line
+                result += devider
+            return result
+
 
 def print_all():
     """Dumps all from DB."""
@@ -438,9 +493,8 @@ def print_all():
 
 def print_from_id(the_id):
     """Prints a post from iD"""
-    result = get_things(f"SELECT book, chapter, part, date, time, tags, note FROM '{db_table}' WHERE iD={the_id}")
-    for row in result:
-        print(f"{row[3]}|{row[4]}:\n{row[0]}/{row[1]}/{row[2]}:\n\n{row[6]}\n")
+    result = get_things(f"SELECT * FROM '{db_table}' WHERE iD={the_id}")
+    print(print_nice(result, "full"))
     logging.debug(f"print_from_id() printed from {the_id}")
 
 
@@ -482,31 +536,31 @@ def get_parts(book, chapter):
 
 def get_notes(book, chapter, part):
     """Gets the notes in the given part of the given chapter in the given book"""
-    result = get_things(f"""SELECT iD,date,tags,
-        REPLACE(REPLACE(REPLACE(SUBSTRING(note, 1, 40),CHAR(10),' '),CHAR(13), ' '), CHAR(13)+CHAR(10), ' ') AS note 
-        FROM '{db_table}' 
-        WHERE book = '{book}' 
-        AND chapter = '{chapter}' 
-        AND part='{part}'""")
-    notes = print_nice(result)
+    sql_q = (f"""SELECT *
+            FROM '{db_table}' 
+            WHERE book = '{book}' 
+            AND chapter = '{chapter}' 
+            AND part='{part}'""")
+    result = get_things(sql_q)
+    notes = print_nice(result, "short")
     logging.debug(f"get_notes() got notes for {book}/{chapter}/{part}")
     return notes
 
 
 def get_latest_db():
     """Gets the latest note in DB by iD"""
-    result = get_things(f"""SELECT book, chapter, part, date, time, tags, note 
+    sql_q = get_things(f"""SELECT *
         FROM '{db_table}' 
         ORDER BY ID DESC LIMIT 1""")
-    result = print_nice(result) 
+    result = print_nice(sql_q, "full")
     logging.debug(f"get_latest_db() got latest and print_nice()")
     return result
 
 
 def get_by_tag(tag):
     """Finds all notes with the given tag"""
-    result = get_things(f"SELECT iD, book, chapter, part, date, time, tags FROM '{db_table}' WHERE tags LIKE '%{tag}%'")
-    result = print_nice(result)
+    result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{tag}%'")
+    result = print_nice(result, "short")
     logging.debug(f"get_by_tag() got by tag ({tag})")
     return result
 
@@ -530,10 +584,7 @@ def run_menu():
 
     def tmp_loop():
         logging.debug(f"run_menu() got tmp")
-        val1 = input(" Do you want to export based on \n t Tag\n > ")
-        match val1:
-            case "t":
-                export_selection('tag', 'test')
+        print(get_latest_db())
 
     def h_loop():
         logging.debug(f"run_menu() got h")
