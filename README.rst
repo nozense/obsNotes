@@ -35,6 +35,7 @@ Dependencies
 
 1. ``pytz``
 2. ``python-frontmatter``
+ * https://github.com/eyeseast/python-frontmatter
 
 Process
 -------
@@ -88,7 +89,7 @@ TODO
 +-----------------------------+--------+-------+
 | Add timezone setting        |  5     |  no   |
 +-----------------------------+--------+-------+
-| Better                      |  1     |  ?    |
+| Better                      |  1     |  yes  |
 | printout function           |        |       |
 +-----------------------------+--------+-------+
 | Faster/cleaner Menu         |  2     |  no   |

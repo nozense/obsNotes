@@ -17,16 +17,29 @@ log_folder = "logs"
 db_file = "obsN.sqlite"
 db_table = "obsNotes"
 
+"""
+import os
+script_dir = os.path.dirname(__file__) #<-- absolute dir the script is in
+rel_path = "2091/data.txt"
+abs_file_path = os.path.join(script_dir, rel_path)
+
+"""
+
+
 # Definitions - do not change these
-main_folder = f"./{main_folder}/"
-db_file = f"{main_folder}{db_file}"
-tmp_folder = f"{main_folder}{tmp_folder}/"
-log_folder = f"{main_folder}{log_folder}/"
-cache_folder = f"{main_folder}{cache_folder}/"
-daily_folder = f"{main_folder}{daily_folder}/"
-export_folder = f"{main_folder}{export_folder}/"
+script_dir = os.path.dirname(__file__)
+main_folder = os.path.join(script_dir, main_folder)
+db_file = os.path.join(script_dir, main_folder, db_file)
+tmp_folder = os.path.join(script_dir, main_folder, tmp_folder)
+log_folder = os.path.join(script_dir, main_folder, log_folder)
+cache_folder = os.path.join(script_dir, main_folder, cache_folder)
+daily_folder = os.path.join(script_dir, main_folder, daily_folder)
+export_folder = os.path.join(script_dir, main_folder, export_folder)
 folder_list = [main_folder, tmp_folder, cache_folder, log_folder, daily_folder, export_folder]
 
+"""
+Adapters for sqlite datetime 
+"""
 
 def adapt_date_iso(val):
     """Adapt datetime.date to ISO 8601 date."""
@@ -38,14 +51,8 @@ def adapt_datetime_iso(val):
     return val.isoformat()
 
 
-def adapt_datetime_epoch(val):
-    """Adapt datetime.datetime to Unix timestamp."""
-    return int(val.timestamp())
-
-
 sqlite3.register_adapter(datetime.date, adapt_date_iso)
 sqlite3.register_adapter(datetime.datetime, adapt_datetime_iso)
-sqlite3.register_adapter(datetime.datetime, adapt_datetime_epoch)
 
 
 def convert_date(val):
@@ -136,22 +143,11 @@ def only_alnu(fix_str):
     return fixed_str
 
 
-def date_from_file(file):
-    """Extracts the date from the daily-files and converts it to a datetime object."""
-    file_date = file.replace(".md", '')
-    file_date = file_date.replace(daily_folder, '')
-    date_format = '%Y-%m-%d'
-    file_date = datetime.datetime.strptime(file_date, date_format).date()
-    logging.debug(f"date_from_file() extracted {file_date} from {file}.")
-    return file_date
-
-
 def write_any(book, chapter, part, date, time, tags, note):
     """Writes any note to the DB, all given"""
     book = only_alnu(book)
     chapter = only_alnu(chapter)
     part = only_alnu(part)
-    logging.debug(f"write_any() got {book} - {chapter} - {part} - {date} - {time} - {tags} - {note}")
     try:
         conn = sqlite3.connect(db_file)
         cur = conn.cursor()
@@ -176,7 +172,6 @@ def write_any_log(book, chapter, part, line):
     part = only_alnu(part)
     words = line.split()
     tags = ""
-    logging.debug(f"write_any_log() got {book} - {chapter} - {part} - {line}") 
     for word in words:
         if word.startswith('#'):
             logging.debug(f"write_any_log() sees {word} as a tag")
@@ -191,9 +186,7 @@ def write_any_log(book, chapter, part, line):
 
 def write_log(line):
     """Writes a line to the journal/log"""
-    logging.debug(f"write_log() got {line}") 
     write_any_log("notes", "journal", "log", line)
-    logging.debug(f"write_log() ran write_any_log()") 
   
 
 def write_file(file):
@@ -205,11 +198,16 @@ def write_file(file):
     book = metadata.get('Book')
     chapter = metadata.get('Chapter')
     part = metadata.get('Part')
-    date = metadata.get('Date')
-    tags = metadata.get('Tags')
-    time = "13:37:00"
+    created = metadata.get('Created')
+    date = datetime.datetime.strftime(created, '%Y-%m-%d')
+    the_time = datetime.datetime.strftime(created, '%H:%M:%S')
+    tagses = metadata.get('Tags')
+    tags = ""
+    for tag in tagses:
+        if tag is not None and len(tag) > 2:
+            tags += f"{tag};"
     logging.debug(f"write_file() sent found data to write_any() - ({post.metadata}) - ({post.content})")
-    write_any(book, chapter, part, date, time, tags, content)
+    write_any(book, chapter, part, date, the_time, tags, content)
     os.remove(file)
     logging.debug(f"write_file() deleted {file}")
     print(f"Note written to {book}/{chapter}/{part}!")   
@@ -220,11 +218,27 @@ def update_from_file(path):
     metadata = post.metadata          
     content = post.content
     the_id = metadata.get('iD')
-    tags = metadata.get('Tags')
+    tags = ""
+    for tag in metadata.get('Tags'):
+        tags += f"{tag};"
+    book = metadata.get('Book')
+    chapter = metadata.get('Chapter')
+    part = metadata.get('Part')
+    created = metadata.get('Created')
+    date = datetime.datetime.strftime(created, '%Y-%m-%d')
+    the_time = datetime.datetime.strftime(created, '%H:%M:%S')
     try:
         conn = sqlite3.connect(db_file)
         cur = conn.cursor()
-        sql_q = f"UPDATE {db_table} SET tags = '{tags}', note = '{content}' WHERE iD = '{the_id}'"
+        sql_q = (f"""UPDATE {db_table} 
+        SET book = '{book}', 
+        chapter ='{chapter}', 
+        part = '{part}', 
+        date = '{date}', 
+        time = '{the_time}', 
+        tags = '{tags}', 
+        note = '{content}' 
+        WHERE iD = '{the_id}'""")
         cur.execute(sql_q)
         conn.commit()
         conn.close()
@@ -239,10 +253,8 @@ def write_all_tmp_files():
     """Finds ALL files in the tmp dir and writes them to db"""
     files = glob.glob(f"{tmp_folder}*.md")
     for file in files:
-        logging.debug(f"write_all_tmp_files() found {file} and sends it to write_file")
         write_file(file)
-        os.remove(file)
-        logging.debug(f"write_all_tmp_files() deleted {file}")
+    return True
 
 
 def create_file(book, chapter, part, date, path):
@@ -252,8 +264,9 @@ def create_file(book, chapter, part, date, path):
         logging.debug(f"create_file() found that the file allready existed!")
         return path
     else:
-        f = open(path, "w")  
-        first_line = f"---\nBook: {book}\nChapter: {chapter}\nPart: {part}\nDate: {date}\nTags: \n---\n"
+        the_time = "13:37:00"
+        f = open(path, "w", encoding="utf-8")
+        first_line = f"---\nBook: {book}\nChapter: {chapter}\nPart: {part}\nCreated: {date} {the_time}\nTags:\n- \n---\n"
         f.write(first_line)
         f.close()
         logging.debug(f"create_file() created the file and added the frontmatter.")
@@ -277,6 +290,11 @@ def export_things(sql_q):
     result = get_things(sql_q)
     i = 0
     for row in result:
+        tags = ""
+        if len(row[6]) > 1:
+            tagses = row[6].split(";")
+            for tag in tagses:
+                tags = f"- {tag}\n"
         write_data = f"""---
 iD: {row[0]} 
 Book: {row[1]}
@@ -284,7 +302,8 @@ Chapter: {row[2]}
 Part: {row[3]}
 Date: {row[4]}
 Time: {row[5]}
-Tags: {row[6]}
+Tags: 
+{tags}
 ---
 {row[7]} 
         """
@@ -294,16 +313,14 @@ Tags: {row[6]}
         if not os.path.exists(folder_path):
             try:  
                 os.makedirs(folder_path)
-                logging.debug(f"export_things() created the folder {folder_path}.")
             except OSError as error:  
                 logging.error(f"export_things() os.mkdir had an error: {error}")
 
         path = f"{folder_path}{clean_date}_{row[0]}.md"
         if not os.path.exists(path):
-            f = open(path, "w")  
+            f = open(path, "w", encoding="utf-8")
             f.write(write_data)
             f.close()
-            logging.debug(f"export_things() created the file {path} and added the data.")
             i += 1
     print(f" Exported a total of {i} files.")
 
@@ -313,19 +330,25 @@ def export_for_edit(the_id):
     sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{the_id}'"
     result = get_things(sql_q)
     for row in result:
+        tags = ""
+        if len(row[6]) > 1:
+            tagses = row[6].split(";")
+            print(tagses)
+            for tag in tagses:
+                if len(tag) > 1:
+                    tags += f"- {tag}\n"
         write_data = f"""---
 iD: {row[0]} 
 Book: {row[1]}
 Chapter: {row[2]}
 Part: {row[3]}
-Date: {row[4]}
-Time: {row[5]}
-Tags: {row[6]}
----
+Created: {row[4]} {row[5]}
+Tags: 
+{tags}---
 {row[7]} 
         """
     if not os.path.exists(path):
-        f = open(path, "w")  
+        f = open(path, "w", encoding="utf-8")
         f.write(write_data)
         f.close()
     return path
@@ -365,19 +388,21 @@ def find_old_daily():
     """Find out if there are any older (and/or newer <- should not happen) daily files in the daily-folder,
     if there is older files it writes them to db with write_file()"""
     now_date = get_date()
-    files = glob.glob(f"{daily_folder}*.md")
+    the_file = "*.md"
+    path = os.path.join(daily_folder, the_file)
+    files = glob.glob(path)
     for file in files: 
         post = frontmatter.load(file)
         metadata = post.metadata          
         content = post.content
-        file_date = metadata.get('Date')
+        created = metadata.get('Created')
+        file_date = datetime.datetime.strftime(created, '%Y-%m-%d')
+        print(f"{file_date} vs {now_date}")
         if not file_date == now_date:
             if len(content) < 6:
                 os.remove(file)
-                logging.debug(f"find_old_daily() found {file} to be empty and deleted it.")
             else:
                 write_file(file)
-                logging.debug(f"find_old_daily() found {file} with {file_date} NOT ({now_date}) wrote it to the DB.")
         else:
             logging.debug(f"find_old_daily() found {file} {file_date} = today ({now_date}) did NOT write it to the DB.")
 
@@ -386,7 +411,9 @@ def run_daily():
     """Runs the daily routine - trying to find the daily file for today's date, creating it if not found."""
     find_old_daily()
     now_date = get_date()
-    path = f"{daily_folder}{now_date}.md"
+    the_file = f"{str(now_date)}.md"
+    path = os.path.join(daily_folder, the_file)
+    print(path)
     path = create_file("notes", "journal", "daily", now_date, path)
     return path
 
@@ -408,18 +435,24 @@ def print_nice(cursor, choice):
     match choice:
         case "full":
             for row in data:
+                tags = ""
+                if len(row[6]) > 1:
+                    tagses = row[6].split(";")
+                    for tag in tagses:
+                        if len(tag) > 1:
+                            tags += f"- {tag}\n"
                 result += (f"""
-    iD: {row[0]}
-    Book: {row[1]}
-    Chapter: {row[2]}
-    Part: {row[3]}
-    Date: {row[4]}
-    Time: {row[5]}
-    Tags: {row[6]}
-
-        {row[7]}
+iD: {row[0]}
+Book: {row[1]}
+Chapter: {row[2]}
+Part: {row[3]}
+Date: {row[4]}
+Time: {row[5]}
+Tags: 
+{tags}
+{row[7]}
                 
-    ============================
+---
                 
                 """)
             return result
@@ -442,8 +475,9 @@ def print_nice(cursor, choice):
                         tag = f"#{tag}"
                         tags += f"{tag} "
                 note = row[7]
+                note = note.replace("\n", " ")
                 note = (note[:30] + '[...]') if len(note) > 30 else note
-                tags = (tags[:30] + '[...]') if len(tags) > 30 else tags
+                tags = (tags[:15] + '[...]') if len(tags) > 15 else tags
                 the_id = row[0]
                 the_date = row[4]
                 the_time = row[5]
@@ -591,15 +625,20 @@ def run_menu():
         files = glob.glob(f"{tmp_folder}*.md")
         file_list = []
         i = 0
-        val1 = input(" Do you want to:\n  e Edit a tmp file\n  w Write a tmp file\n  d Delete a temp file\n    > ")
         logging.debug(f"run_menu() - h: Asks for e/w/d and generates a file list of files in tmp/")
         if files:
             logging.debug(f"run_menu() - h: found files and prints out the list.")
             for file in files:
-                file_name = file.replace("{tmp_folder}", "")
+                file_name = file.replace(f"{tmp_folder}", "")
                 file_list.append(file)
                 i += 1
-                print(f"    {i}: {file_name}")   
+                print(f"    {i}: {file_name}")
+            val1 = input(""" 
+                Do you want to:
+                    e Edit a tmp file
+                    w Write a tmp file
+                    d Delete a temp file
+                    > """)
             match val1:
                 case "e":
                     logging.debug(f"run_menu() - h: got e")
@@ -737,7 +776,6 @@ def run_menu():
         t Search tag
         b Browser DB
         h Handle tmp-files
-        tmp Test function
 
         > """)
         match selector1:
