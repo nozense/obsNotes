@@ -77,6 +77,16 @@ First run will create:
 and **daily** is for a longer daily entry
 that starts is life as an auto-generated .md file.
 
+=====
+USE
+=====
+Most is self-explanatory.
+If you modify files in an external editor, pay attention to the front-matter format,
+the order, number and names of the attributes are needed by the script.
+Add/change any value (the part at the right of the ":") but do not change the attribute (to the left of ":").
+
+Name of the daily files is of no consequence - its the date following "Created: " in the frontmatter that is checked.
+
 
 =====
 TODO

@@ -5,6 +5,8 @@ import os
 import glob
 import frontmatter
 import logging
+import random
+
 
 # SETTINGS - Change these to your liking
 editor = "notepad"  # the command to launch your favorite editor
@@ -16,14 +18,7 @@ export_folder = "export"
 log_folder = "logs"
 db_file = "obsN.sqlite"
 db_table = "obsNotes"
-
-"""
-import os
-script_dir = os.path.dirname(__file__) #<-- absolute dir the script is in
-rel_path = "2091/data.txt"
-abs_file_path = os.path.join(script_dir, rel_path)
-
-"""
+log_level = 1  # 1 = seperate file for every run, save all, 2 just save the latest run
 
 
 # Definitions - do not change these
@@ -40,6 +35,7 @@ folder_list = [main_folder, tmp_folder, cache_folder, log_folder, daily_folder, 
 """
 Adapters for sqlite datetime 
 """
+
 
 def adapt_date_iso(val):
     """Adapt datetime.date to ISO 8601 date."""
@@ -77,13 +73,14 @@ sqlite3.register_converter("timestamp", convert_timestamp)
 
 def first_run():
     """A function to create a folder-structure and sqlite file to use obsNotes"""
+    log(2, "first_run()")
     for folder in folder_list:
         if not os.path.exists(folder):
             try:
                 os.makedirs(folder)
-                print(f"first_run() created the folder {folder}.")
+                log(2, f" - Folder did not exist, created {folder}")
             except OSError as error:
-                print(f"first_run() os.mkdir had an error: {error}")
+                log(1, f"first_run() os.makedirs had an error: {error}")
 
     sql_q = (f'CREATE TABLE "{db_table}" (\n'
              '	"iD"	INTEGER NOT NULL UNIQUE,\n'
@@ -103,30 +100,17 @@ def first_run():
         conn.commit()
         conn.close()
         write_log("DB created!")
+        log(2, f" - Database created and first row created")
     except sqlite3.Error as error:
-        print(f"first_run() had an except (sqlite3.error): {error}")
+        log(1, f"first_run() had an except (sqlite3.error): {error}")
     finally:
         return
-
-
-def do_the_logging():
-    """Defines the logging-settings"""
-    now_log = f"{get_date()}_{datetime.datetime.now(pytz.timezone('Europe/Stockholm')).strftime('%H-%M-%S')}"
-    log_f_n = f"{log_folder}{now_log}.log"
-    format_str = "%(asctime)s:%(levelname)s:%(lineno)i:%(message)s"
-    logging.basicConfig(filename=log_f_n, encoding='utf-8', filemode='w', format=format_str, level=logging.DEBUG)
-    logging.info('asctime:levelname:lineno:message')
-    # Logging levels: 
-    # logging.debug('This is a debug message')
-    # logging.info('This is an info message')
-    # logging.warning('This is a warning message')
-    # logging.error('This is an error message')
-    # logging.critical('This is a critical message')
 
 
 def get_date():
     """Gets the datetime date for Europe/Stockholm timezone"""
     local_date = datetime.datetime.now(pytz.timezone('Europe/Stockholm')).date()
+    local_date = datetime.datetime.strftime(local_date, '%Y-%m-%d')
     return local_date
 
 
@@ -143,13 +127,75 @@ def only_alnu(fix_str):
     return fixed_str
 
 
+def gen_color():
+    """Generates a random hex-value similar to a hex-color-code.
+    Really only to have some random characters."""
+    color = random.randrange(0, 2 ** 24)
+    hex_color = hex(color)
+    hex_color = hex_color[2:]
+    return hex_color
+
+
+def do_the_logging():
+    """Defines the logging-settings"""
+    log_file = "log.log"
+    if log_level == 1:
+        log_file = f"{get_date()}_{get_time().replace(':', '-')}_{gen_color()}-log.log"
+    log_file = os.path.join(log_folder, log_file)
+    format_str = "%(asctime)s:%(levelname)s:%(lineno)i:%(message)s"
+    logging.basicConfig(filename=log_file, encoding='utf-8', filemode='w', format=format_str, level=logging.DEBUG)
+    logging.info('asctime:levelname:lineno:message')
+
+
+def log(sel, mess):
+    match sel:
+        case 1:
+            logging.error(mess)
+        case 2:
+            logging.debug(mess)
+        case 3:
+            logging.info(mess)
+
+
+def gen_write_data(row):
+    """Takes a database row and generates a string to print out"""
+    log(2, "gen_write_data()")
+    tags = prt_tags(row[6])
+    write_data = (f"""---
+iD: {row[0]} 
+Book: {row[1]}
+Chapter: {row[2]}
+Part: {row[3]}
+Created: {row[4]} {row[5]}
+Tags: 
+{tags}---
+{row[7]} 
+    """)
+    return write_data
+
+
+def prt_tags(row):
+    """Takes the database `tags` field and generates a yaml-frontmatter version"""
+    log(2, "prt_tags()")
+    tags = "- \n"
+    if len(row) > 3:
+        tags = ""
+        tagses = row.split(";")
+        for tag in tagses:
+            if len(tag) > 1:
+                tags += f"- {tag}\n"
+    return tags
+
+
 def write_any(book, chapter, part, date, time, tags, note):
     """Writes any note to the DB, all given"""
+    log(2, "write_any()")
     book = only_alnu(book)
     chapter = only_alnu(chapter)
     part = only_alnu(part)
     try:
         conn = sqlite3.connect(db_file)
+        log(2, " - Connected to db")
         cur = conn.cursor()
         sql_q = f"""
             INSERT INTO {db_table} (book, chapter, part, date, time, tags, note) 
@@ -157,16 +203,18 @@ def write_any(book, chapter, part, date, time, tags, note):
             """
         insert_tuple = (book, chapter, part, date, time, tags, note)
         cur.execute(sql_q, insert_tuple)
+        log(2, " - tuple inserted")
         conn.commit()
-        logging.debug(f"write_any() wrote it to DB - tuple: {insert_tuple}")
     except sqlite3.Error as error:
-        logging.error(f"write_any() had an except (sqlite3.error): {error}")
+        log(1, f"write_any() had an except (sqlite3.error): {error}")
     finally:
         conn.close()
+        log(2, " - Connection closed")
 
 
 def write_any_log(book, chapter, part, line):
     """Writes a log to any book/chapter"""
+    log(2, "write_any_log()")
     book = only_alnu(book)
     chapter = only_alnu(chapter)
     part = only_alnu(part)
@@ -174,24 +222,23 @@ def write_any_log(book, chapter, part, line):
     tags = ""
     for word in words:
         if word.startswith('#'):
-            logging.debug(f"write_any_log() sees {word} as a tag")
             line = line.replace(word, '')
             word = word.replace('#', '')
             tags += f"{word};"
     now_date = get_date()
     now_time = get_time()
     write_any(book, chapter, part, now_date, now_time, tags, line)
-    logging.debug(f"write_any_log() ran write_any()")
 
 
 def write_log(line):
     """Writes a line to the journal/log"""
+    log(2, "write_log()")
     write_any_log("notes", "journal", "log", line)
   
 
 def write_file(file):
     """Writes the given long-file to DB"""
-    logging.debug(f"write_file() got {file}")
+    log(2, "write_file()")
     post = frontmatter.load(file)
     metadata = post.metadata          
     content = post.content
@@ -206,21 +253,24 @@ def write_file(file):
     for tag in tagses:
         if tag is not None and len(tag) > 2:
             tags += f"{tag};"
-    logging.debug(f"write_file() sent found data to write_any() - ({post.metadata}) - ({post.content})")
     write_any(book, chapter, part, date, the_time, tags, content)
     os.remove(file)
-    logging.debug(f"write_file() deleted {file}")
+    log(2, " - Note written and file removed")
     print(f"Note written to {book}/{chapter}/{part}!")   
 
 
 def update_from_file(path):
+    """Writes changes from a file to the database"""
+    log(2, "update_from_file()")
     post = frontmatter.load(path)
     metadata = post.metadata          
     content = post.content
     the_id = metadata.get('iD')
+    tagses = metadata.get('Tags')
     tags = ""
-    for tag in metadata.get('Tags'):
-        tags += f"{tag};"
+    for tag in tagses:
+        if tag is not None and len(tag) > 2:
+            tags += f"{tag};"
     book = metadata.get('Book')
     chapter = metadata.get('Chapter')
     part = metadata.get('Part')
@@ -229,6 +279,7 @@ def update_from_file(path):
     the_time = datetime.datetime.strftime(created, '%H:%M:%S')
     try:
         conn = sqlite3.connect(db_file)
+        log(2, " - Connected to db")
         cur = conn.cursor()
         sql_q = (f"""UPDATE {db_table} 
         SET book = '{book}', 
@@ -241,11 +292,14 @@ def update_from_file(path):
         WHERE iD = '{the_id}'""")
         cur.execute(sql_q)
         conn.commit()
+        log(2, " - db updated")
         conn.close()
+        log(2, " - connection closed")
     except sqlite3.Error as error:
-        logging.error(f"update_from_file() had an except (sqlite3.error): {error}")
+        log(1, f"update_from_file() had an except (sqlite3.error): {error}")
     finally:
         os.remove(path)
+        log(2, " - file removed")
         return f"Updated {the_id}!"
 
 
@@ -258,56 +312,45 @@ def write_all_tmp_files():
 
 
 def create_file(book, chapter, part, date, path):
-    logging.debug(f"create_file() will try to create {path}")
-    if os.path.exists(path):
-        print("Finns redan!")
-        logging.debug(f"create_file() found that the file allready existed!")
+    """Creates a file to insert longer notes to the database"""
+    log(2, "create_file()")
+    if os.path.exists(path.strip()):
+        log(2, " - File already exists")
+        print("File found!")
         return path
-    else:
+    elif not os.path.exists(path.strip()):
         the_time = "13:37:00"
         f = open(path, "w", encoding="utf-8")
+        log(2, " - File created")
         first_line = f"---\nBook: {book}\nChapter: {chapter}\nPart: {part}\nCreated: {date} {the_time}\nTags:\n- \n---\n"
         f.write(first_line)
+        log(2, " - frontmatter written")
         f.close()
-        logging.debug(f"create_file() created the file and added the frontmatter.")
+        log(2, " - File closed")
         return path
 
 
 def get_things(sql_q):
-    logging.debug(f"get_things() got {sql_q}")
+    """Gets things from the database and returns the cursor"""
+    log(2, "get_things()")
     try:
         conn = sqlite3.connect(db_file)
+        log(2, " - Connected to db")
         cur = conn.cursor()
         cur.execute(sql_q)
-        logging.debug(f"get_things() got things")
+        log(2, " - sql executed, returning cursor")
         return cur
     except sqlite3.Error as error:
-        logging.error(f"get_things() had an except (sqlite3.error): {error}")
+        log(2, f"get_things() had an except (sqlite3.error): {error}")
 
 
-def export_things(sql_q):
+def export_things_md(sql_q):
     """Export from DB to file based on sql_q - a sql query."""
+    log(2, "export_things()")
     result = get_things(sql_q)
     i = 0
     for row in result:
-        tags = ""
-        if len(row[6]) > 1:
-            tagses = row[6].split(";")
-            for tag in tagses:
-                tags = f"- {tag}\n"
-        write_data = f"""---
-iD: {row[0]} 
-Book: {row[1]}
-Chapter: {row[2]}
-Part: {row[3]}
-Date: {row[4]}
-Time: {row[5]}
-Tags: 
-{tags}
----
-{row[7]} 
-        """
-        
+        write_data = gen_write_data(row)
         clean_date = row[4].replace(":", "-")
         folder_path = f"{export_folder}{row[1]}/{row[2]}/{row[3]}/"
         if not os.path.exists(folder_path):
@@ -326,27 +369,12 @@ Tags:
 
 
 def export_for_edit(the_id):
-    path = f"{cache_folder}cache_{the_id}.md"
+    the_file = f"cache_{the_id}.md"
+    path = os.path.join(cache_folder, the_file)
     sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{the_id}'"
     result = get_things(sql_q)
     for row in result:
-        tags = ""
-        if len(row[6]) > 1:
-            tagses = row[6].split(";")
-            print(tagses)
-            for tag in tagses:
-                if len(tag) > 1:
-                    tags += f"- {tag}\n"
-        write_data = f"""---
-iD: {row[0]} 
-Book: {row[1]}
-Chapter: {row[2]}
-Part: {row[3]}
-Created: {row[4]} {row[5]}
-Tags: 
-{tags}---
-{row[7]} 
-        """
+        write_data = gen_write_data(row)
     if not os.path.exists(path):
         f = open(path, "w", encoding="utf-8")
         f.write(write_data)
@@ -355,74 +383,78 @@ Tags:
 
 
 def export_selection(choise, selection):
-    logging.debug(f"export_selection() got {choise} AND {selection}.")
+    """export to file based on selection"""
+    log(2, "export_selection()")
     sql_q = "not"
     match choise:
         case "tag":
-            logging.debug(f"export_selection() choose tag.")
             sql_q = f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{selection}%'"
         case "book":
-            logging.debug(f"export_selection() choose book.")
             sql_q = f"SELECT * FROM '{db_table}' WHERE book = '{selection}'"
         case "chapter":
-            logging.debug(f"export_selection() choose chapter.")
             selection = selection.split(";")
             sql_q = f"SELECT * FROM '{db_table}' WHERE book = '{selection[1]}' AND chapter = '{selection[2]}'"
         case "part":
-            logging.debug(f"export_selection() choose part.")
             selection = selection.split(";")
             sql_q = f"""SELECT * FROM '{db_table}' 
                 WHERE book = '{selection[1]}' 
                 AND chapter = '{selection[2]}' 
                 AND part = '{selection[3]}'"""
         case "id":
-            logging.debug(f"export_selection() choose id.")
             sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{selection}'"
         case _:
             logging.error(f"export_selection() didnt find the choise!")
     if not sql_q == "not":
-        export_things(sql_q)
+        export_things_md(sql_q)
 
 
 def find_old_daily():
     """Find out if there are any older (and/or newer <- should not happen) daily files in the daily-folder,
     if there is older files it writes them to db with write_file()"""
+    log(2, "find_old_daily()")
     now_date = get_date()
     the_file = "*.md"
     path = os.path.join(daily_folder, the_file)
     files = glob.glob(path)
+    return_path = "no-today-file"
     for file in files: 
         post = frontmatter.load(file)
         metadata = post.metadata          
         content = post.content
         created = metadata.get('Created')
         file_date = datetime.datetime.strftime(created, '%Y-%m-%d')
-        print(f"{file_date} vs {now_date}")
-        if not file_date == now_date:
+        if file_date < now_date:
             if len(content) < 6:
+                print("Old daily is empty - Removed")
                 os.remove(file)
             else:
+                print("Written old daily")
                 write_file(file)
-        else:
-            logging.debug(f"find_old_daily() found {file} {file_date} = today ({now_date}) did NOT write it to the DB.")
+        elif file_date == now_date:
+            return_path = file
+    return return_path
 
 
 def run_daily():
     """Runs the daily routine - trying to find the daily file for today's date, creating it if not found."""
-    find_old_daily()
+    log(2, "run_daily()")
+    return_path = find_old_daily()
     now_date = get_date()
-    the_file = f"{str(now_date)}.md"
+    color = gen_color()
+    the_file = f"{str(now_date)}_{color}.md"
     path = os.path.join(daily_folder, the_file)
-    print(path)
-    path = create_file("notes", "journal", "daily", now_date, path)
+    if return_path == "no-today-file":
+        path = create_file("notes", "journal", "daily", now_date, path)
+    else:
+        path = return_path
     return path
 
 
 def open_today():
     """Open todays daily-file with specified editor."""
+    log(2, "open_today()")
     path = run_daily()
-    os.system(editor + " " + path)    
-    logging.debug(f"open_today() ran run_daily  -> then '{editor} {path}'")
+    os.system(editor + " " + path)
 
 
 def print_nice(cursor, choice):
@@ -430,31 +462,14 @@ def print_nice(cursor, choice):
      * `full` gives a full recount of all the information in given cursor
      * `short` just gives some information and chopped in length - in a table
     """
+    log(2, "print_nice()")
     data = cursor
     result = ""
     match choice:
         case "full":
             for row in data:
-                tags = ""
-                if len(row[6]) > 1:
-                    tagses = row[6].split(";")
-                    for tag in tagses:
-                        if len(tag) > 1:
-                            tags += f"- {tag}\n"
-                result += (f"""
-iD: {row[0]}
-Book: {row[1]}
-Chapter: {row[2]}
-Part: {row[3]}
-Date: {row[4]}
-Time: {row[5]}
-Tags: 
-{tags}
-{row[7]}
-                
----
-                
-                """)
+                result += gen_write_data(row)
+                result += "\n---\n"
             return result
 
         case "short":
@@ -519,57 +534,58 @@ Tags:
 
 def print_all():
     """Dumps all from DB."""
+    log(2, "print_all()")
     result = get_things(f"SELECT * FROM '{db_table}' ORDER BY date")
     for row in result:
         print(row)
-    logging.debug(f"print_all() printed all")
 
 
 def print_from_id(the_id):
     """Prints a post from iD"""
+    log(2, "print_from_id()")
     result = get_things(f"SELECT * FROM '{db_table}' WHERE iD={the_id}")
     print(print_nice(result, "full"))
-    logging.debug(f"print_from_id() printed from {the_id}")
 
 
 def get_books():
     """Gets a list of all the books in db"""
+    log(2, "get_books()")
     books = []
     result = get_things(f"SELECT book FROM '{db_table}'")
     for row in result:
         row = only_alnu(row)
         if row not in books:
             books.append(row)
-    logging.debug(f"get_books() got books")
     return books
 
 
 def get_chapters(book):
     """Gets all the chapters in given book"""
+    log(2, "get_chapters()")
     chapters = []
     result = get_things(f"SELECT chapter FROM '{db_table}' WHERE book = '{book}'")
     for row in result:
         row = only_alnu(row)
         if row not in chapters:
             chapters.append(row)
-    logging.debug(f"get_chapters() got chapters for {book}")
     return chapters
 
 
 def get_parts(book, chapter):
     """Gets all the parts of the given chapter in the given book"""
+    log(2, "get_parts()")
     parts = []
     result = get_things(f"SELECT part FROM '{db_table}' WHERE book = '{book}' AND chapter = '{chapter}'")
     for row in result:
         row = only_alnu(row)
         if row not in parts:
             parts.append(row)
-    logging.debug(f"get_parts() got parts for {book}/{chapter}")
     return parts
 
 
 def get_notes(book, chapter, part):
     """Gets the notes in the given part of the given chapter in the given book"""
+    log(2, "get_notes()")
     sql_q = (f"""SELECT *
             FROM '{db_table}' 
             WHERE book = '{book}' 
@@ -577,30 +593,30 @@ def get_notes(book, chapter, part):
             AND part='{part}'""")
     result = get_things(sql_q)
     notes = print_nice(result, "short")
-    logging.debug(f"get_notes() got notes for {book}/{chapter}/{part}")
     return notes
 
 
 def get_latest_db():
     """Gets the latest note in DB by iD"""
+    log(2, "get_latest_db()")
     sql_q = get_things(f"""SELECT *
         FROM '{db_table}' 
         ORDER BY ID DESC LIMIT 1""")
     result = print_nice(sql_q, "full")
-    logging.debug(f"get_latest_db() got latest and print_nice()")
     return result
 
 
 def get_by_tag(tag):
     """Finds all notes with the given tag"""
+    log(2, "get_by_tag()")
     result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{tag}%'")
     result = print_nice(result, "short")
-    logging.debug(f"get_by_tag() got by tag ({tag})")
     return result
 
 
 def create_long(book, chapter, part):
     """Creates a new long-file for the given book/chapter/part and returns path"""
+    log(2, "create_long()")
     now_date = get_date()
     path = f"{tmp_folder}tmp_{now_date}_{book}_{chapter}_{part}.md"
     path = create_file(book, chapter, part, now_date, path)
@@ -609,25 +625,23 @@ def create_long(book, chapter, part):
 
 def run_menu():
     """Runs the menu-driven notes system - alot of looping and code (sanitize!)"""
-
+    log(2, "run_menu()")
 # Menu Loops
 
     def q_loop():
-        logging.debug(f"run_menu() got q")
+        log(2, f"run_menu() got q")
         print("\n Good Bye! \n")
 
     def tmp_loop():
-        logging.debug(f"run_menu() got tmp")
+        log(2, f"run_menu() got tmp")
         print(get_latest_db())
 
     def h_loop():
-        logging.debug(f"run_menu() got h")
+        log(2, f"run_menu() got h")
         files = glob.glob(f"{tmp_folder}*.md")
         file_list = []
         i = 0
-        logging.debug(f"run_menu() - h: Asks for e/w/d and generates a file list of files in tmp/")
         if files:
-            logging.debug(f"run_menu() - h: found files and prints out the list.")
             for file in files:
                 file_name = file.replace(f"{tmp_folder}", "")
                 file_list.append(file)
@@ -641,31 +655,26 @@ def run_menu():
                     > """)
             match val1:
                 case "e":
-                    logging.debug(f"run_menu() - h: got e")
+                    log(2, f"run_menu() - h: got e")
                     val2 = int(input("\n What file do you want to edit? "))
-                    logging.debug(f"run_menu() - h/e: asks what file to edit")
                     if len(file_list) >= val2:
                         path = file_list[val2-1]
                         os.system(editor + " " + path)
-                        logging.debug(f"run_menu() - h/e: opened {path} in editor")
                 case "d":
-                    logging.debug(f"run_menu() - h: got d")
+                    log(2, f"run_menu() - h: got d")
                     val2 = int(input("\n What file do you want to edit? "))
                     if len(file_list) >= val2:
                         path = file_list[val2-1]
-                        logging.debug(f"run_menu() - h/d: deleted {path}")
                         os.remove(path)
                         print("File deleted!")
                 case "w":
-                    logging.debug(f"run_menu() - h: got w")
+                    log(2, f"run_menu() - h: got w")
                     val2 = int(input("\n What file do you want to write? (0 For all) "))
                     if val2 == 0:
-                        logging.debug(f"run_menu() - h/w: got 0 - write_all_tmp_files() to write all files")
                         write_all_tmp_files()
                     elif len(file_list) >= val2:
                         path = file_list[val2-1]
                         write_file(path)
-                        logging.debug(f"run_menu() - h/w: write_file({path})")
                 case _:
                     print("Something went wrong!")
                     logging.error(f"run_menu()- h: Got a choise thats not in the menu")
@@ -673,19 +682,16 @@ def run_menu():
             print("No files found!")
             
     def a_loop():
-        logging.debug(f"run_menu() got a")
+        log(2, f"run_menu() got a")
     # What book
         books = get_books()
-        logging.debug(f"run_menu() - a: get_books()")
         i = 0
         print("\n")
         for book in books:
             i += 1
             print(f"    {i}: {book}")
         val1 = int(input("\n What book do you want to add a note to? ")) - 1
-        logging.debug(f"run_menu() - a: list books in DB and asks what book to add a note to.")
         book = books[val1]
-        logging.debug(f"run_menu() - a: get {book}")
     # What Chapter
         chapters = get_chapters(book)
         i = 0
@@ -694,9 +700,7 @@ def run_menu():
             i += 1
             print(f"    {i}: {chapter}")
         val2 = int(input("\n What chapter do you want to add to? ")) - 1
-        logging.debug(f"run_menu() - a: lists chapters in the book and ask what chapter to add the note to.")
         chapter = chapters[val2]
-        logging.debug(f"run_menu() - a: got {chapter}")
     # What part
         parts = get_parts(book, chapter)
         i = 0
@@ -705,24 +709,19 @@ def run_menu():
             i += 1
             print(f"    {i}: {part}")
         val3 = int(input("\n What part do you want to add to? ")) - 1
-        logging.debug(f"run_menu() - a: lists parts in the chapter and ask what part to add the note to.")
         part = parts[val3]
-        logging.debug(f"run_menu() - a: got {part}")
     # Long or short
         val4 = int(input(f"\n Do you want to add a:\n 1. Short log\n 2. Long note \n  > "))
-        logging.debug(f"run_menu() - a: asks if its a long or short note.")
         if val4 == 1:
-            logging.debug(f"run_menu() - a: got short note")
             val5 = input(f"\n What do you want to add to {book}/{chapter}/{part}:\n  > ")
             write_any_log(book, chapter, part, val5)
         elif val4 == 2:
-            logging.debug(f"run_menu() - a: got long note")
             path = create_long(book, chapter, part)
             os.system(editor + " " + path) 
 
     def b_loop():
         try:
-            logging.debug(f"run_menu() got b")
+            log(2, f"run_menu() got b")
     # What book
             books = get_books()
             i = 0
@@ -803,7 +802,7 @@ def run_menu():
 
     # QUICK LOG
             case "l":
-                logging.debug(f"run_menu() got l")
+                log(2, f"run_menu() got l")
                 runit1 = 0
                 while runit1 == 0:
                     input_line = input("\nLine for log ('exit' to exit) > ")
@@ -815,18 +814,18 @@ def run_menu():
                         runit1 = 2     
     # SEARCH TAG
             case "t":
-                logging.debug(f"run_menu() got t")
+                log(2, f"run_menu() got t")
                 tag_search = input("\nWhat tag to seach for? (l to list existing) ")
                 print(get_by_tag(tag_search))
                 look_at = input("\nWant to look closer at any of them? (iD)")        
                 print_from_id(look_at) 
     # Open daily file
             case "o":
-                logging.debug(f"run_menu() got o")
+                log(2, f"run_menu() got o")
                 open_today()
                 continue        
             case _:
-                logging.debug(f"run_menu() did not get a viable selection in the menu!")
+                logging.error(f"run_menu() did not get a viable selection in the menu!")
                 print("\nSomething went sideways, check your input!\n")
                 continue
 
@@ -834,6 +833,8 @@ def run_menu():
 def main():
     if not os.path.exists(db_file):
         first_run()
+        do_the_logging()
+        run_menu()
     else:
         do_the_logging()
         run_menu()
