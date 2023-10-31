@@ -18,7 +18,7 @@ export_folder = "export"
 log_folder = "logs"
 db_file = "obsN.sqlite"
 db_table = "obsNotes"
-log_level = 1  # 1 = seperate file for every run, save all, 2 just save the latest run
+log_level = 2  # 1 = separate file for every run, save all, 2 just save the latest run
 
 
 # Definitions - do not change these
@@ -140,7 +140,7 @@ def do_the_logging():
     """Defines the logging-settings"""
     log_file = "log.log"
     if log_level == 1:
-        log_file = f"{get_date()}_{get_time().replace(':', '-')}_{gen_color()}-log.log"
+        log_file = f"{get_date()}_{get_time().replace(':', '-')}_{gen_color()}.log"
     log_file = os.path.join(log_folder, log_file)
     format_str = "%(asctime)s:%(levelname)s:%(lineno)i:%(message)s"
     logging.basicConfig(filename=log_file, encoding='utf-8', filemode='w', format=format_str, level=logging.DEBUG)
@@ -148,6 +148,7 @@ def do_the_logging():
 
 
 def log(sel, mess):
+    """A shorter syntax for logging"""
     match sel:
         case 1:
             logging.error(mess)
@@ -205,11 +206,10 @@ def write_any(book, chapter, part, date, time, tags, note):
         cur.execute(sql_q, insert_tuple)
         log(2, " - tuple inserted")
         conn.commit()
-    except sqlite3.Error as error:
-        log(1, f"write_any() had an except (sqlite3.error): {error}")
-    finally:
         conn.close()
         log(2, " - Connection closed")
+    except sqlite3.Error as error:
+        log(1, f"write_any() had an except (sqlite3.error): {error}")
 
 
 def write_any_log(book, chapter, part, line):
@@ -233,9 +233,13 @@ def write_any_log(book, chapter, part, line):
 def write_log(line):
     """Writes a line to the journal/log"""
     log(2, "write_log()")
-    write_any_log("notes", "journal", "log", line)
-  
+    if len(line) > 2:
+        write_any_log("notes", "journal", "log", line)
+    else:
+        log(2, " - line shorter than 2 char, return false!")
+        return False
 
+  
 def write_file(file):
     """Writes the given long-file to DB"""
     log(2, "write_file()")
@@ -356,29 +360,38 @@ def export_things_md(sql_q):
         if not os.path.exists(folder_path):
             try:  
                 os.makedirs(folder_path)
+                log(2, " - Folder did not exist - created")
             except OSError as error:  
-                logging.error(f"export_things() os.mkdir had an error: {error}")
-
+                log(1, f"export_things() os.mkdir had an error: {error}")
         path = f"{folder_path}{clean_date}_{row[0]}.md"
         if not os.path.exists(path):
             f = open(path, "w", encoding="utf-8")
             f.write(write_data)
             f.close()
+            log(2, f" - exported file ({i})")
             i += 1
     print(f" Exported a total of {i} files.")
 
 
 def export_for_edit(the_id):
+    """Exports a DB-entry by iD  to a cashe file for edit."""
+    log(2, "export_for_edit(the_id)")
     the_file = f"cache_{the_id}.md"
     path = os.path.join(cache_folder, the_file)
     sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{the_id}'"
     result = get_things(sql_q)
+    write_data = "no"
     for row in result:
         write_data = gen_write_data(row)
     if not os.path.exists(path):
-        f = open(path, "w", encoding="utf-8")
-        f.write(write_data)
-        f.close()
+        if not write_data == "no":
+            f = open(path, "w", encoding="utf-8")
+            f.write(write_data)
+            f.close()
+            log(2, " - wrote to cache file")
+    if write_data == "no":
+        log(1, " - id not in DB!")
+        return False
     return path
 
 
@@ -389,21 +402,26 @@ def export_selection(choise, selection):
     match choise:
         case "tag":
             sql_q = f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{selection}%'"
+            log(2, " - tag")
         case "book":
             sql_q = f"SELECT * FROM '{db_table}' WHERE book = '{selection}'"
+            log(2, " - book")
         case "chapter":
             selection = selection.split(";")
             sql_q = f"SELECT * FROM '{db_table}' WHERE book = '{selection[1]}' AND chapter = '{selection[2]}'"
+            log(2, " - chapter")
         case "part":
+            log(2, " - part")
             selection = selection.split(";")
             sql_q = f"""SELECT * FROM '{db_table}' 
                 WHERE book = '{selection[1]}' 
                 AND chapter = '{selection[2]}' 
                 AND part = '{selection[3]}'"""
         case "id":
+            log(2, " - id")
             sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{selection}'"
         case _:
-            logging.error(f"export_selection() didnt find the choise!")
+            log(1, f"export_selection() didnt find the choise!")
     if not sql_q == "not":
         export_things_md(sql_q)
 
@@ -424,13 +442,17 @@ def find_old_daily():
         created = metadata.get('Created')
         file_date = datetime.datetime.strftime(created, '%Y-%m-%d')
         if file_date < now_date:
+            log(2, " - older than today")
             if len(content) < 6:
+                log(2, " - empty")
                 print("Old daily is empty - Removed")
                 os.remove(file)
             else:
                 print("Written old daily")
                 write_file(file)
+                log(2, " - wrote old daily file to db.")
         elif file_date == now_date:
+            log(2, " - found today!")
             return_path = file
     return return_path
 
@@ -444,8 +466,10 @@ def run_daily():
     the_file = f"{str(now_date)}_{color}.md"
     path = os.path.join(daily_folder, the_file)
     if return_path == "no-today-file":
+        log(2, " - No today-file found")
         path = create_file("notes", "journal", "daily", now_date, path)
     else:
+        log(2, " - found today!")
         path = return_path
     return path
 
@@ -467,12 +491,14 @@ def print_nice(cursor, choice):
     result = ""
     match choice:
         case "full":
+            log(2, " - full")
             for row in data:
                 result += gen_write_data(row)
                 result += "\n---\n"
             return result
 
         case "short":
+            log(2, " - short")
             len_id = 5
             len_date = 10
             len_time = 8
@@ -691,7 +717,12 @@ def run_menu():
             i += 1
             print(f"    {i}: {book}")
         val1 = int(input("\n What book do you want to add a note to? ")) - 1
-        book = books[val1]
+        try:
+            book = books[val1]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() books - {error}")
+            return
     # What Chapter
         chapters = get_chapters(book)
         i = 0
@@ -700,7 +731,12 @@ def run_menu():
             i += 1
             print(f"    {i}: {chapter}")
         val2 = int(input("\n What chapter do you want to add to? ")) - 1
-        chapter = chapters[val2]
+        try:
+            chapter = chapters[val2]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() chapters - {error}")
+            return
     # What part
         parts = get_parts(book, chapter)
         i = 0
@@ -709,7 +745,12 @@ def run_menu():
             i += 1
             print(f"    {i}: {part}")
         val3 = int(input("\n What part do you want to add to? ")) - 1
-        part = parts[val3]
+        try:
+            part = parts[val3]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() parts - {error}")
+            return
     # Long or short
         val4 = int(input(f"\n Do you want to add a:\n 1. Short log\n 2. Long note \n  > "))
         if val4 == 1:
@@ -721,7 +762,7 @@ def run_menu():
 
     def b_loop():
         try:
-            log(2, f"run_menu() got b")
+            log(2, f" - got b")
     # What book
             books = get_books()
             i = 0
@@ -730,7 +771,12 @@ def run_menu():
                 i += 1
                 print(f"    {i}: {book}")
             val1 = int(input("\n What book do you want to open? (nr) ")) - 1
-            book = books[val1]
+            try:
+                book = books[val1]
+            except IndexError as error:
+                print(f"Something went sideways!")
+                log(1, f"b_loop() books - {error}")
+                return
     # What Chapter
             chapters = get_chapters(book)
             i = 0
@@ -739,7 +785,12 @@ def run_menu():
                 i += 1
                 print(f"    {i}: {chapter}")
             val2 = int(input("\n What chapter do you want to open? (nr) ")) - 1
-            chapter = chapters[val2]
+            try:
+                chapter = chapters[val2]
+            except IndexError as error:
+                print(f"Something went sideways!")
+                log(1, f"b_loop() chapters - {error}")
+                return
     # What part
             parts = get_parts(book, chapter)
             i = 0
@@ -748,19 +799,38 @@ def run_menu():
                 i += 1
                 print(f"    {i}: {part}")
             val3 = int(input("\n What part do you want to open? (nr) ")) - 1
-            part = parts[val3]
+            try:
+                part = parts[val3]
+            except IndexError as error:
+                print(f"Something went sideways!")
+                log(1, f"b_loop() parts - {error}")
+                return
     # What note
             print(get_notes(book, chapter, part))
+            log(2, f"b_loop() edit/view")
             val4 = int(input("\n 0: Edit a note\n What note id do you want to open?  "))
             if val4 == 0:
+                log(2, f"b_loop() edit/view - edit")
                 val4 = int(input("\n What note id do you want to EDIT?  "))
                 path = export_for_edit(val4)
-                os.system(editor + " " + path)
-                print(update_from_file(path))
+                if not path:
+                    os.system(editor + " " + path)
+                    print(update_from_file(path))
+                    log(2, f"b_loop() edit/view - edited!")
+                else:
+                    print("Something went sideways!")
+                    log(1, f"b_loop() edit/view - tried to edit a id not in db!")
             else:
-                print_from_id(val4)
+                log(2, f"b_loop() edit/view - view")
+                try:
+                    print_from_id(val4)
+                except IndexError as error:
+                    print(f"Something went sideways!")
+                    log(1, f"b_loop() view - {error}")
+                    return
         except OSError as error:
-            print(f"Something went sideways! ({error})")
+            print(f"Something went sideways!")
+            log(1, f"b_loop() had an error! {error}")
             return
         
     runit = 0
@@ -799,7 +869,6 @@ def run_menu():
             case "b":
                 b_loop()
                 continue
-
     # QUICK LOG
             case "l":
                 log(2, f"run_menu() got l")
@@ -810,7 +879,11 @@ def run_menu():
                         print("\nReturning to start!\n")
                         runit1 = 1
                     else:
-                        write_log(input_line)
+                        do_it = write_log(input_line)
+                        if do_it is False:
+                            print("Line must be longer than 2 char!")
+                        else:
+                            print("Line written")
                         runit1 = 2     
     # SEARCH TAG
             case "t":
@@ -831,14 +904,26 @@ def run_menu():
 
 
 def main():
+    log(2, "main()")
     if not os.path.exists(db_file):
-        first_run()
-        do_the_logging()
-        run_menu()
+        log(2, " - no DB-file found!")
+        try:
+            first_run()
+            run_menu()
+        except OSError as error:
+            print(f"Something went sideways!")
+            log(1, f" - had an error! ({error})")
+            return
     else:
-        do_the_logging()
-        run_menu()
+        log(2, " - DB-file found!")
+        try:
+            run_menu()
+        except OSError as error:
+            print(f"Something went sideways!")
+            log(1, f" - had an error! ({error})")
+            return
 
 
 if __name__ == "__main__":
+    do_the_logging()
     main()
