@@ -9,7 +9,7 @@ import random
 
 
 # SETTINGS - Change these to your liking
-editor = "notepad"  # the command to launch your favorite editor
+editor = "vim"  # the command to launch your favorite editor
 main_folder = "obsN-files"
 tmp_folder = "tmp"
 cache_folder = "cache"
@@ -395,11 +395,11 @@ def export_for_edit(the_id):
     return path
 
 
-def export_selection(choise, selection):
+def export_selection(choice, selection):
     """export to file based on selection"""
     log(2, "export_selection()")
     sql_q = "not"
-    match choise:
+    match choice:
         case "tag":
             sql_q = f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{selection}%'"
             log(2, " - tag")
@@ -421,7 +421,7 @@ def export_selection(choise, selection):
             log(2, " - id")
             sql_q = f"SELECT * FROM '{db_table}' WHERE iD = '{selection}'"
         case _:
-            log(1, f"export_selection() didnt find the choise!")
+            log(1, f"export_selection() didnt find the choice!")
     if not sql_q == "not":
         export_things_md(sql_q)
 
@@ -632,13 +632,22 @@ def get_latest_db():
     return result
 
 
-def get_by_tag(tag):
-    """Finds all notes with the given tag"""
-    log(2, "get_by_tag()")
-    result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{tag}%'")
+
+def search_for(choice, srch_str):
+    log(2, "search_for()")
+    match choice:
+        case "all":
+            log(2, " - all")
+            result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{srch_str}%' or note LIKE '%{srch_str}%'")
+        case "tags":
+            log(2, " - tags")
+            result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{srch_str}%'")
+        case _:
+            print("Something went wrong!")
+            logging.error(f" - Did'nt get a valid case match!")
+            return False
     result = print_nice(result, "short")
     return result
-
 
 def create_long(book, chapter, part):
     """Creates a new long-file for the given book/chapter/part and returns path"""
@@ -653,6 +662,50 @@ def run_menu():
     """Runs the menu-driven notes system - alot of looping and code (sanitize!)"""
     log(2, "run_menu()")
 # Menu Loops
+    def what_parts():
+            # What book
+        books = get_books()
+        i = 0
+        print("\n")
+        for book in books:
+            i += 1
+            print(f"    {i}: {book}")
+        val1 = int(input("\n What book? ")) - 1
+        try:
+            book = books[val1]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() books - {error}")
+            return
+    # What Chapter
+        chapters = get_chapters(book)
+        i = 0
+        print("\n")
+        for chapter in chapters:
+            i += 1
+            print(f"    {i}: {chapter}")
+        val2 = int(input("\n What chapter? ")) - 1
+        try:
+            chapter = chapters[val2]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() chapters - {error}")
+            return
+    # What part
+        parts = get_parts(book, chapter)
+        i = 0
+        print("\n")
+        for part in parts:
+            i += 1
+            print(f"    {i}: {part}")
+        val3 = int(input("\n What part? ")) - 1
+        try:
+            part = parts[val3]
+        except IndexError as error:
+            print(f"Something went sideways!")
+            log(1, f"a_loop() parts - {error}")
+            return
+        return [book, chapter, part]
 
     def q_loop():
         log(2, f"run_menu() got q")
@@ -688,7 +741,7 @@ def run_menu():
                         os.system(editor + " " + path)
                 case "d":
                     log(2, f"run_menu() - h: got d")
-                    val2 = int(input("\n What file do you want to edit? "))
+                    val2 = int(input("\n What file do you want to delete? "))
                     if len(file_list) >= val2:
                         path = file_list[val2-1]
                         os.remove(path)
@@ -703,54 +756,16 @@ def run_menu():
                         write_file(path)
                 case _:
                     print("Something went wrong!")
-                    logging.error(f"run_menu()- h: Got a choise thats not in the menu")
+                    logging.error(f"run_menu()- h: Got a choice thats not in the menu")
         else:
             print("No files found!")
             
     def a_loop():
         log(2, f"run_menu() got a")
-    # What book
-        books = get_books()
-        i = 0
-        print("\n")
-        for book in books:
-            i += 1
-            print(f"    {i}: {book}")
-        val1 = int(input("\n What book do you want to add a note to? ")) - 1
-        try:
-            book = books[val1]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() books - {error}")
-            return
-    # What Chapter
-        chapters = get_chapters(book)
-        i = 0
-        print("\n")
-        for chapter in chapters:
-            i += 1
-            print(f"    {i}: {chapter}")
-        val2 = int(input("\n What chapter do you want to add to? ")) - 1
-        try:
-            chapter = chapters[val2]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() chapters - {error}")
-            return
-    # What part
-        parts = get_parts(book, chapter)
-        i = 0
-        print("\n")
-        for part in parts:
-            i += 1
-            print(f"    {i}: {part}")
-        val3 = int(input("\n What part do you want to add to? ")) - 1
-        try:
-            part = parts[val3]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() parts - {error}")
-            return
+        parts = what_parts()
+        book = parts[0]
+        chapter = parts[1]
+        part = parts[2]
     # Long or short
         val4 = int(input(f"\n Do you want to add a:\n 1. Short log\n 2. Long note \n  > "))
         if val4 == 1:
@@ -760,51 +775,28 @@ def run_menu():
             path = create_long(book, chapter, part)
             os.system(editor + " " + path) 
 
+    def s_loop():
+        log(2, f"run_menu() got s")
+        srch_str = input("\nWhat do you want to seach for (str)? \n >")
+        srch_in = input("\n Search in:\n t: Tags \n a: Everything \n > ")
+        match srch_in:
+            case "t":
+                choice = "tags"
+            case "a":
+                choice = "all"
+            case _:
+                choice = "all"
+        print(search_for(choice, srch_str))
+        look_at = input("\nWant to look closer at any of them? (iD)")        
+        print_from_id(look_at) 
+
     def b_loop():
         try:
             log(2, f" - got b")
-    # What book
-            books = get_books()
-            i = 0
-            print("\n")
-            for book in books:
-                i += 1
-                print(f"    {i}: {book}")
-            val1 = int(input("\n What book do you want to open? (nr) ")) - 1
-            try:
-                book = books[val1]
-            except IndexError as error:
-                print(f"Something went sideways!")
-                log(1, f"b_loop() books - {error}")
-                return
-    # What Chapter
-            chapters = get_chapters(book)
-            i = 0
-            print("\n")
-            for chapter in chapters:
-                i += 1
-                print(f"    {i}: {chapter}")
-            val2 = int(input("\n What chapter do you want to open? (nr) ")) - 1
-            try:
-                chapter = chapters[val2]
-            except IndexError as error:
-                print(f"Something went sideways!")
-                log(1, f"b_loop() chapters - {error}")
-                return
-    # What part
-            parts = get_parts(book, chapter)
-            i = 0
-            print("\n")
-            for part in parts:
-                i += 1
-                print(f"    {i}: {part}")
-            val3 = int(input("\n What part do you want to open? (nr) ")) - 1
-            try:
-                part = parts[val3]
-            except IndexError as error:
-                print(f"Something went sideways!")
-                log(1, f"b_loop() parts - {error}")
-                return
+            parts = what_parts()
+            book = parts[0]
+            chapter = parts[1]
+            part = parts[2]
     # What note
             print(get_notes(book, chapter, part))
             log(2, f"b_loop() edit/view")
@@ -813,7 +805,7 @@ def run_menu():
                 log(2, f"b_loop() edit/view - edit")
                 val4 = int(input("\n What note id do you want to EDIT?  "))
                 path = export_for_edit(val4)
-                if not path:
+                if path:
                     os.system(editor + " " + path)
                     print(update_from_file(path))
                     log(2, f"b_loop() edit/view - edited!")
@@ -842,7 +834,7 @@ def run_menu():
         l Quick log
         o Open daily file
         a Add to any
-        t Search tag
+        s Search
         b Browser DB
         h Handle tmp-files
 
@@ -886,12 +878,9 @@ def run_menu():
                             print("Line written")
                         runit1 = 2     
     # SEARCH TAG
-            case "t":
-                log(2, f"run_menu() got t")
-                tag_search = input("\nWhat tag to seach for? (l to list existing) ")
-                print(get_by_tag(tag_search))
-                look_at = input("\nWant to look closer at any of them? (iD)")        
-                print_from_id(look_at) 
+            case "s":
+                s_loop()
+                continue
     # Open daily file
             case "o":
                 log(2, f"run_menu() got o")
