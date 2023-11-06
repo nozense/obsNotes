@@ -36,6 +36,7 @@ Dependencies
 1. ``pytz``
 2. ``python-frontmatter``
  * https://github.com/eyeseast/python-frontmatter
+3. ``pyyaml`` 
 
 Process
 -------
@@ -54,7 +55,7 @@ Process
     * Edit the "settings" section to your liking.
     * Take a look at the ``first_run()`` function:
         * understand what this does before running the script!
-3. Run the script
+3. Run the script (-h for help)
 
 Database Struckture
 ^^^^^^^^^^^^^^^^^^^
@@ -86,6 +87,7 @@ the order, number and names of the attributes are needed by the script.
 Add/change any value (the part at the right of the ":") but do not change the attribute (to the left of ":").
 
 Name of the daily files is of no consequence - its the date following "Created: " in the frontmatter that is checked.
+-h for help on the commandline functions.
 
 
 =====
@@ -107,4 +109,6 @@ TODO
 | Make the logging logical    |  2     |  yes? |
 +-----------------------------+--------+-------+
 | Search function             |  2     |  no   |
++-----------------------------+--------+-------+
+| Log for first_run()         |  3     |  no   |
 +-----------------------------+--------+-------+
