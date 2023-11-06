@@ -10,7 +10,7 @@ import random
 import argparse
 import yaml
 
-'''
+''' test
     This is the config! 
     Change these to your liking - the part to the right of :
     Pleace take care to not change the format of this.
