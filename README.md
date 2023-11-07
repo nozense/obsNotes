@@ -4,7 +4,6 @@
 > This script "works" but is not tested or complete!
 > **Do not run** this script without reading and understanding code!
 
-
 ## What is it?
 
 A simple script to handle a sqlight database file to store notes and a journal.
@@ -12,9 +11,7 @@ A simple script to handle a sqlight database file to store notes and a journal.
 obsNotes
     One Big Sqlight Notes
 
-
 The script lets you write to a sqlite database from a cli-menu and your favorite editor.
-
 
 ### Features
 
@@ -22,9 +19,7 @@ The script lets you write to a sqlite database from a cli-menu and your favorite
 - MarkDown export
 - Very hackable!
 
-
 ## Installation
-
 
 ### Dependencies
 
@@ -34,7 +29,6 @@ The script lets you write to a sqlite database from a cli-menu and your favorite
 3. ``pyyaml`` 
 
 ### Process
-
 
 > [!NOTE]
 > This script has a **First run** function!
@@ -70,7 +64,6 @@ First run will create:
 and **daily** is for a longer daily entry
 that starts is life as an auto-generated .md file.
 
-
 ## USE
 
 Most is self-explanatory.
@@ -81,6 +74,7 @@ Add/change any value (the part at the right of the ":") but do not change the at
 Name of the daily files is of no consequence - its the date following "Created: " in the frontmatter that is checked.
 
 ### CLI
+
 ```
 usage: obsN.py [-h] [-o] [-l] [-m] [-writeconfig] [-firstrun] [-alias]
 
@@ -99,4 +93,4 @@ options:
 - [ ] Faster/cleaner Menu   
 - [x] Make the logging logical 
 - [ ] Search function  
-- [ ] Log for first_run() 
+- [x] Log for first_run() 
