@@ -9,9 +9,11 @@ import logging
 import random
 import argparse
 import yaml
+from pprint import pprint
 
-''' test
+'''
     This is the config! 
+    (Below this comment, 'cfg')
     Change these to your liking - the part to the right of :
     Pleace take care to not change the format of this.
     To export these to run the script with '-writeconfig'
@@ -62,20 +64,6 @@ db_file = cfg['db_file']
 db_table = cfg['db_table']
 log_level = cfg['log_level']  # 1 = separate file for every run, save all, 2 just save the latest run
 
-   
-'''
-# SETTINGS - Change these to your liking
-editor = "vim"  # the command to launch your favorite editor
-main_folder = "obsN-files"
-tmp_folder = "tmp"
-cache_folder = "cache"
-daily_folder = "daily"
-export_folder = "export"
-log_folder = "logs"
-db_file = "obsN.sqlite"
-db_table = "obsNotes"
-log_level = 2  # 1 = separate file for every run, save all, 2 just save the latest run
-'''
 
 # Definitions - do not change these
 main_folder = os.path.join(script_dir, main_folder)
@@ -176,48 +164,6 @@ def log(sel, mess):
             logging.debug(mess)
         case 3:
             logging.info(mess)
-
-
-def first_run():
-    """A function to create a folder-structure and sqlite file to use obsNotes"""
-    log(2, "first_run()")
-    sql_q = (f'CREATE TABLE "{db_table}" (\n'
-             '	"iD"	INTEGER NOT NULL UNIQUE,\n'
-             '	"book"	TEXT NOT NULL,\n'
-             '	"chapter"	TEXT NOT NULL,\n'
-             '	"part"	TEXT,\n'
-             '	"date"	TEXT NOT NULL,\n'
-             '	"time"	TEXT NOT NULL,\n'
-             '	"tags"	TEXT,\n'
-             '	"note"	TEXT,\n'
-             '	PRIMARY KEY("iD" AUTOINCREMENT)\n'
-             '    )')
-    for folder in folder_list:
-        print(f"{folder}")
-    create_all = input("Should I create these folders (and database file)? y/n > ")
-    if create_all == "y" or create_all == "Y":
-        for folder in folder_list:
-            if not os.path.exists(folder):
-                try:
-                    os.makedirs(folder)
-                    log(2, f" - Folder did not exist, created {folder}")
-                except OSError as error:
-                    log(1, f"first_run() os.makedirs had an error: {error}")
-        try:
-            conn = sqlite3.connect(db_file)
-            cur = conn.cursor()
-            cur.execute(sql_q)
-            conn.commit()
-            conn.close()
-            write_log("DB created!")
-            log(2, f" - Database created and first row created")
-        except sqlite3.Error as error:
-            log(1, f"first_run() had an except (sqlite3.error): {error}")
-        print("Created Folders and Database file! \n")
-    else:
-        print("Did NOT create anything!\n")
-    
-
 
 
 def gen_write_data(row):
@@ -719,6 +665,95 @@ def create_long(book, chapter, part):
     path = create_file(book, chapter, part, now_date, path)
     return path
 
+def write_alias():
+    alias_line = f"alias obsN='{sys.executable} {__file__}'"
+    print(alias_line)
+    print("\nThe line above is an example 'alias' line for .bashrc.")
+    print("If written to your ~/.bashrc it lets you run this script with 'obsN' from anywhere.\n")
+    write_rc = input("Should I try and append this line to the end of your .bashrc? y/n > ")
+    if write_rc == "y" or write_rc == "Y":
+        try:
+            file_rc = os.path.expanduser('~')
+            file_rc = f"{file_rc}/.bashrc"
+            right_path = input(f"Is this the path to your .bashrc '{file_rc}' ? y/n >")
+            if right_path == "y" or right_path == "Y":
+                with open(file_rc, "a") as bashrc:
+                    bashrc.write("\n")
+                    bashrc.write(alias_line)
+                    bashrc.write("\n")
+                    print("Appended alias to .bashrc\n")
+                    print("Reload .bashrc with 'source ~/.bashrc' - or reboot (= \n")
+            else:
+                print("Did NOT write to .bashrc")
+        except OSError as error:
+            print(f"Something went sideways!")
+            log(1, f" - had an error! ({error})")
+    else:
+        print("Did NOT write to .bashrc")
+
+def first_run():
+    """A function to create a folder-structure and sqlite file to use obsNotes"""
+    f=open(f"{script_dir}/first_run_log(OK TO DELETE).txt", "a+")
+    def first_run_log(line):
+        log_line = f"{get_date()} - {get_time()}: {line}\n"
+        f.write(log_line)
+    first_run_log("first_run()")
+    print("\nYour current config is: \n")
+    pprint(cfg, width=1)
+    ok_cfg = input("\nDoes this look alright to you? y/n > ")
+    if not ok_cfg == "y" or ok_cfg == "Y":
+        write_cfg()
+        print("\nCreated a config.yaml file in the same directory as the script-file.\n")
+        print("Please modify this file to your liking and run this script agan!")
+        sys.exit()
+    sql_q = (f'CREATE TABLE "{db_table}" (\n'
+             '	"iD"	INTEGER NOT NULL UNIQUE,\n'
+             '	"book"	TEXT NOT NULL,\n'
+             '	"chapter"	TEXT NOT NULL,\n'
+             '	"part"	TEXT,\n'
+             '	"date"	TEXT NOT NULL,\n'
+             '	"time"	TEXT NOT NULL,\n'
+             '	"tags"	TEXT,\n'
+             '	"note"	TEXT,\n'
+             '	PRIMARY KEY("iD" AUTOINCREMENT)\n'
+             '    )')
+    for folder in folder_list:
+        print(f"{folder}")
+    create_all = input("Should I create these folders (and database file)? y/n > ")
+    if create_all == "y" or create_all == "Y":
+        first_run_log(" - Create folders: YES")
+        for folder in folder_list:
+            if not os.path.exists(folder):
+                try:
+                    os.makedirs(folder)
+                    first_run_log(f" - Folder did not exist, created {folder}")
+                except OSError as error:
+                    first_run_log(f"first_run() os.makedirs had an error: {error}")
+        try:
+            conn = sqlite3.connect(db_file)
+            cur = conn.cursor()
+            cur.execute(sql_q)
+            conn.commit()
+            conn.close()
+            first_run_log(f" - Database created")
+            write_log("DB created!")
+            first_run_log(f" - First row written to DB")
+        except sqlite3.Error as error:
+            first_run_log(f"first_run() had an except (sqlite3.error): {error}")
+        print("Created Folders and Database file! \n")
+        if not os.path.exists(f"{script_dir}/config.yaml"):
+            first_run_log(" - No config file")
+            write_cfg()
+            first_run_log(" - Created config.yaml")
+            print("\nDid not find a config.yaml - Created one!\n")
+        write_alias()
+        print("\nExiting the script now, run it again to se the menu och use '-h' to see cli-commands!\n")
+        sys.exit()
+    else:
+        print("Did NOT create anything!\n")
+        first_run_log(" - Did NOT create anything!")
+        sys.exit()
+    
 
 def run_menu():
     """Runs the menu-driven notes system - alot of looping and code (sanitize!)"""
@@ -964,20 +999,32 @@ def main():
         return
 
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", help="Open Daily-file", action="store_true")
 parser.add_argument("-l", help="Write quick log-line", action="store_true")
 parser.add_argument("-m", help="Run the menu", action="store_true")
-parser.add_argument("-writeconfig", help="Export config to file to make it presistent.", action="store_true")
-parser.add_argument("-firstrun", help="Firstrun script - creates folderstruckture and DB (Check settings in py-file first!)", action="store_true")
-parser.add_argument("-alias", help="Generates a alias for you to put in ~/.bashrc to run the script.", action="store_true")
+
 
 args = parser.parse_args()
 
 
 
 if __name__ == "__main__":
+    if not os.path.exists(db_file): # <--- Check for firstrun!
+        print("\nDid not find your DB-file!\n")
+        print(f"Looked in for it here: {db_file}\n")
+        print("This is eighter your first run of this script - or a catastrophic faliure!\n")
+        frst_run = input("Is this the first time you run this script (or a new installation)? y/n > ")
+        if frst_run == "n" or frst_run == "N":
+            print("\nTry and make sure your DB-file is in the above location, or modifie your config!\n")
+            sys.exit()
+        elif frst_run == "y" or frst_run == "Y":
+            print("\nWill now run a first-run script!")
+            first_run()
+        else:
+            print("Something went sideways!")
+            sys.exit()
+    
     try:
         do_the_logging()
     except OSError as error:
@@ -995,44 +1042,6 @@ if __name__ == "__main__":
             print("Line written")
     elif args.m:
         run_menu()
-    elif args.writeconfig:
-        write_cfg()
-    elif args.firstrun:
-        if not os.path.exists(db_file):
-            log(2, " - no DB-file found!")
-            try:
-                first_run()
-                log(2, "args.firstrun")
-            except OSError as error:
-                print(f"Something went sideways!")
-                log(1, f" - had an error! ({error})")
-        else:
-            log(2, " - DB file already exists!")
-            print("DB-file already exists, won't do anything!")
-    elif args.alias:
-        alias_line = f"alias obsN='{sys.executable} {__file__}'"
-        print(alias_line)
-        write_rc = input("Should I try and append this line to the end of your .bashrc? y/n >")
-        if write_rc == "y" or write_rc == "Y":
-            try:
-                file_rc = os.path.expanduser('~')
-                file_rc = f"{file_rc}/.bashrc"
-                right_path = input(f"Is this the path to your .bashrc '{file_rc}' ? y/n >")
-                if right_path == "y" or right_path == "Y":
-                    with open(file_rc, "a") as bashrc:
-                        bashrc.write("\n")
-                        bashrc.write(alias_line)
-                        bashrc.write("\n")
-                        print("Appended alias to .bashrc and reloaded .bashrc\n")
-                        print("Reload .bashrc with 'source ~/.bashrc' - or reboot (= \n")
-                else:
-                    print("Did NOT write to .bashrc")
-            except OSError as error:
-                print(f"Something went sideways!")
-                log(1, f" - had an error! ({error})")
-        else:
-            print("Did NOT write to .bashrc")
     else:
         log(2, "No args")
         main()
-    
