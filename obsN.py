@@ -9,6 +9,8 @@ import logging
 import random
 import argparse
 import yaml
+import shutil
+from pathlib import Path
 from pprint import pprint
 
 '''
@@ -16,7 +18,7 @@ from pprint import pprint
     (Below this comment, 'cfg')
     Change these to your liking - the part to the right of :
     Pleace take care to not change the format of this.
-    To export these to run the script with '-writeconfig'
+    These settings are exported to config.yaml during the first_run.
 
     If the script finds a config.yaml in the same folder as the script itself
     it will use the config in that file instead of these!
@@ -30,6 +32,7 @@ cfg = {
     'cache_folder' : 'cache',
     'daily_folder' : 'daily',
     'export_folder' : 'export',
+    'backup_folder' : '~', 
     'log_folder' : 'logs',
     'db_file' : 'obsN.sqlite',
     'db_table' : 'obsNotes',
@@ -59,11 +62,14 @@ tmp_folder = cfg['tmp_folder']
 cache_folder = cfg['cache_folder']
 daily_folder = cfg['daily_folder']
 export_folder = cfg['export_folder']
+backup_folder = cfg['backup_folder']
 log_folder = cfg['log_folder']
 db_file = cfg['db_file']
 db_table = cfg['db_table']
 log_level = cfg['log_level']  # 1 = separate file for every run, save all, 2 just save the latest run
 
+if backup_folder == "~":
+    backup_folder = f"{str(Path.home())}"
 
 # Definitions - do not change these
 main_folder = os.path.join(script_dir, main_folder)
@@ -165,6 +171,24 @@ def log(sel, mess):
         case 3:
             logging.info(mess)
 
+def make_backup():
+    sql_q = f"SELECT * FROM '{db_table}'"
+    now_date = get_date()
+    export_things_md(sql_q)
+    archive_path = f"{backup_folder}/obsNotes_backup_{str(now_date)}"
+    shutil.make_archive(archive_path, 'tar', export_folder)
+    for filename in os.listdir(export_folder):
+        file_path = os.path.join(export_folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+    return f"{archive_path}.tar"
+
+
 
 def gen_write_data(row):
     """Takes a database row and generates a string to print out"""
@@ -187,6 +211,8 @@ def prt_tags(row):
     """Takes the database `tags` field and generates a yaml-frontmatter version"""
     log(2, "prt_tags()")
     tags = "- \n"
+    if row is None:
+        return tags
     if len(row) > 3:
         tags = ""
         tagses = row.split(";")
@@ -364,7 +390,7 @@ def export_things_md(sql_q):
     for row in result:
         write_data = gen_write_data(row)
         clean_date = row[4].replace(":", "-")
-        folder_path = f"{export_folder}{row[1]}/{row[2]}/{row[3]}/"
+        folder_path = f"{export_folder}/{row[1]}/{row[2]}/{row[3]}/"
         if not os.path.exists(folder_path):
             try:  
                 os.makedirs(folder_path)
@@ -747,7 +773,7 @@ def first_run():
             first_run_log(" - Created config.yaml")
             print("\nDid not find a config.yaml - Created one!\n")
         write_alias()
-        print("\nExiting the script now, run it again to se the menu och use '-h' to see cli-commands!\n")
+        print("\nExiting the script now, run it again to see the menu or use '-h' to see cli-commands!\n")
         sys.exit()
     else:
         print("Did NOT create anything!\n")
@@ -1003,6 +1029,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-o", help="Open Daily-file", action="store_true")
 parser.add_argument("-l", help="Write quick log-line", action="store_true")
 parser.add_argument("-m", help="Run the menu", action="store_true")
+parser.add_argument("-bu", help="Make backup to single archive in ~/", action="store_true")
 
 
 args = parser.parse_args()
@@ -1042,6 +1069,10 @@ if __name__ == "__main__":
             print("Line written")
     elif args.m:
         run_menu()
+    elif args.bu:
+        file_path = make_backup()
+        print(f"Backup (as markdown files) saved to your home folder ({file_path}).\n To backup the DB (as is) just copy the '{db_file}' file.")
     else:
         log(2, "No args")
         main()
+    
