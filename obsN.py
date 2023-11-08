@@ -9,6 +9,7 @@ import logging
 import random
 import argparse
 import yaml
+import shutil
 from pprint import pprint
 
 '''
@@ -16,7 +17,7 @@ from pprint import pprint
     (Below this comment, 'cfg')
     Change these to your liking - the part to the right of :
     Pleace take care to not change the format of this.
-    To export these to run the script with '-writeconfig'
+    These settings are exported to config.yaml during the first_run.
 
     If the script finds a config.yaml in the same folder as the script itself
     it will use the config in that file instead of these!
@@ -165,6 +166,8 @@ def log(sel, mess):
         case 3:
             logging.info(mess)
 
+def make_backup():
+    shutil.make_archive(script_dir, 'zip',  script_dir)
 
 def gen_write_data(row):
     """Takes a database row and generates a string to print out"""
@@ -1003,6 +1006,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-o", help="Open Daily-file", action="store_true")
 parser.add_argument("-l", help="Write quick log-line", action="store_true")
 parser.add_argument("-m", help="Run the menu", action="store_true")
+parser.add_argument("-bz", help="Make backup to single zip-file.", action="store_true")
 
 
 args = parser.parse_args()
@@ -1042,6 +1046,9 @@ if __name__ == "__main__":
             print("Line written")
     elif args.m:
         run_menu()
+    elif args.bz:
+        make_backup()
     else:
         log(2, "No args")
         main()
+    
