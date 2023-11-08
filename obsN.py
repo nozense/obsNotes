@@ -32,6 +32,7 @@ cfg = {
     'cache_folder' : 'cache',
     'daily_folder' : 'daily',
     'export_folder' : 'export',
+    'backup_folder' : '~', 
     'log_folder' : 'logs',
     'db_file' : 'obsN.sqlite',
     'db_table' : 'obsNotes',
@@ -61,11 +62,14 @@ tmp_folder = cfg['tmp_folder']
 cache_folder = cfg['cache_folder']
 daily_folder = cfg['daily_folder']
 export_folder = cfg['export_folder']
+backup_folder = cfg['backup_folder']
 log_folder = cfg['log_folder']
 db_file = cfg['db_file']
 db_table = cfg['db_table']
 log_level = cfg['log_level']  # 1 = separate file for every run, save all, 2 just save the latest run
 
+if backup_folder == "~":
+    backup_folder = f"{str(Path.home())}"
 
 # Definitions - do not change these
 main_folder = os.path.join(script_dir, main_folder)
@@ -169,10 +173,10 @@ def log(sel, mess):
 
 def make_backup():
     sql_q = f"SELECT * FROM '{db_table}'"
+    now_date = get_date()
     export_things_md(sql_q)
-    home = str(Path.home())
-    home = f"{home}/obsNotes_backup"
-    shutil.make_archive(home, 'tar', export_folder)
+    archive_path = f"{backup_folder}/obsNotes_backup_{str(now_date)}"
+    shutil.make_archive(archive_path, 'tar', export_folder)
     for filename in os.listdir(export_folder):
         file_path = os.path.join(export_folder, filename)
         try:
@@ -182,7 +186,7 @@ def make_backup():
                 shutil.rmtree(file_path)
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
-
+    return f"{archive_path}.tar"
 
 
 
@@ -207,6 +211,8 @@ def prt_tags(row):
     """Takes the database `tags` field and generates a yaml-frontmatter version"""
     log(2, "prt_tags()")
     tags = "- \n"
+    if row is None:
+        return tags
     if len(row) > 3:
         tags = ""
         tagses = row.split(";")
@@ -767,7 +773,7 @@ def first_run():
             first_run_log(" - Created config.yaml")
             print("\nDid not find a config.yaml - Created one!\n")
         write_alias()
-        print("\nExiting the script now, run it again to se the menu och use '-h' to see cli-commands!\n")
+        print("\nExiting the script now, run it again to see the menu or use '-h' to see cli-commands!\n")
         sys.exit()
     else:
         print("Did NOT create anything!\n")
@@ -1064,7 +1070,8 @@ if __name__ == "__main__":
     elif args.m:
         run_menu()
     elif args.bu:
-        make_backup()
+        file_path = make_backup()
+        print(f"Backup (as markdown files) saved to your home folder ({file_path}).\n To backup the DB (as is) just copy the '{db_file}' file.")
     else:
         log(2, "No args")
         main()
