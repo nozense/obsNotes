@@ -10,6 +10,7 @@ import random
 import argparse
 import yaml
 import shutil
+from pathlib import Path
 from pprint import pprint
 
 '''
@@ -167,7 +168,23 @@ def log(sel, mess):
             logging.info(mess)
 
 def make_backup():
-    shutil.make_archive(script_dir, 'zip',  script_dir)
+    sql_q = f"SELECT * FROM '{db_table}'"
+    export_things_md(sql_q)
+    home = str(Path.home())
+    home = f"{home}/obsNotes_backup"
+    shutil.make_archive(home, 'tar', export_folder)
+    for filename in os.listdir(export_folder):
+        file_path = os.path.join(export_folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
+
 
 def gen_write_data(row):
     """Takes a database row and generates a string to print out"""
@@ -367,7 +384,7 @@ def export_things_md(sql_q):
     for row in result:
         write_data = gen_write_data(row)
         clean_date = row[4].replace(":", "-")
-        folder_path = f"{export_folder}{row[1]}/{row[2]}/{row[3]}/"
+        folder_path = f"{export_folder}/{row[1]}/{row[2]}/{row[3]}/"
         if not os.path.exists(folder_path):
             try:  
                 os.makedirs(folder_path)
@@ -1006,7 +1023,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-o", help="Open Daily-file", action="store_true")
 parser.add_argument("-l", help="Write quick log-line", action="store_true")
 parser.add_argument("-m", help="Run the menu", action="store_true")
-parser.add_argument("-bz", help="Make backup to single zip-file.", action="store_true")
+parser.add_argument("-bu", help="Make backup to single archive in ~/", action="store_true")
 
 
 args = parser.parse_args()
@@ -1046,7 +1063,7 @@ if __name__ == "__main__":
             print("Line written")
     elif args.m:
         run_menu()
-    elif args.bz:
+    elif args.bu:
         make_backup()
     else:
         log(2, "No args")

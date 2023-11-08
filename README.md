@@ -14,12 +14,14 @@
   - [Use](#use)
     - [CLI](#cli)
     - [tmp-files and daily-files](#tmp-files-and-daily-files)
+    - [Backup function](#backup-function)
   - [TODO](#todo)
 
 ## What is it?
 
 A simple python script to handle a sqlight database file to store notes and a journal.\
-The script lets you write to a sqlite database from a cli-"interface" and your favorite editor.
+The script lets you write to a sqlite database from a cli-"interface" and your favorite editor.\
+Only tested on linux - and I highly doubt it works anywhere else without modification.
 
 Written in very easy python and should be easely modified by anyone with some basic knowlage of python.\
 My goal is to make the code reable, well documented and easy to follow - that might not be the case yet.
@@ -84,13 +86,14 @@ Run the script! (pref. with python in linux)
 ### CLI
 
 ```bash
-usage: obsN.py [-h] [-o] [-l] [-m] [-writeconfig] [-firstrun] [-alias]
+usage: obsN.py [-h] [-o] [-l] [-m] [-bu]
 
 options:
-  -h, --help    show this help message and exit
-  -o            Open Daily-file
-  -l            Write quick log-line
-  -m            Run the menu
+  -h, --help  show this help message and exit
+  -o          Open Daily-file
+  -l          Write quick log-line
+  -m          Run the menu
+  -bu         Make backup to single archive in ~/
 ```
 
 ### tmp-files and daily-files
@@ -100,6 +103,12 @@ the order, number and names of the attributes are needed by the script.
 Add/change any value (the part at the right of the ":") but do not change the attribute (to the left of ":").
 
 Name of the daily files is of no consequence - its the date following "Created: " in the frontmatter that is checked.
+
+### Backup function
+
+Exports the complete DB to markdown-files struktured in folders /book/chapter/part.\
+Archives this in a single tar file in user home directory (~).\
+Removes the created markdown-files.
 
 ## TODO
 
