@@ -4,19 +4,6 @@
 > This script "works" but is not tested or complete!
 > **Do not run** this script without reading and understanding code!
 
-- [obsNotes](#obsnotes)
-  - [What is it?](#what-is-it)
-    - [Features](#features)
-  - [Installation](#installation)
-    - [Dependencies](#dependencies)
-    - [Process](#process)
-  - [Database Struckture](#database-struckture)
-  - [Use](#use)
-    - [CLI](#cli)
-    - [tmp-files and daily-files](#tmp-files-and-daily-files)
-    - [Backup function](#backup-function)
-  - [TODO](#todo)
-
 ## What is it?
 
 A simple python script to handle a sqlight database file to store notes and a journal.\
@@ -83,6 +70,12 @@ that starts is life as an auto-generated .md file.
 Most is self-explanatory.
 Run the script! (pref. with python in linux)
 
+### Errors
+
+If you se:\
+"Something went sideways!"\
+in the terminal - thats a good indication to check the latest log!
+
 ### CLI
 
 ```bash
@@ -119,4 +112,5 @@ Removes the created markdown-files.
 - [x] Make the logging logical
 - [ ] Search function  
 - [x] Log for `first_run()`
+- [ ] Better 'use' instructions (a manual)
   

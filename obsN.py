@@ -36,7 +36,8 @@ cfg = {
     'log_folder' : 'logs',
     'db_file' : 'obsN.sqlite',
     'db_table' : 'obsNotes',
-    'log_level' : '2', 
+    'log_level' : '2',
+    'colors' : 'yes',
     }
 
 script_dir = os.path.dirname(__file__)
@@ -50,13 +51,13 @@ def write_cfg():
     if not os.path.exists(f"{script_dir}/config.yaml"):
         with open(f"{script_dir}/config.yaml", "w") as yamlfile:
             yaml.dump(cfg, yamlfile)
-        print("Creation of config.yaml successful!")
+        print(clr.OK + "Creation of config.yaml successful!" + clr.END)
     else:
-        print("Found config.yaml - edit the file instead!")
+        print(clr.ER + "Found config.yaml - edit that file instead!" + clr.END)
     
 
-# SETTINGS - Change these to your liking
-editor = cfg['editor']  # the command to launch your favorite editor
+
+editor = cfg['editor']  
 main_folder = cfg['main_folder']
 tmp_folder = cfg['tmp_folder']
 cache_folder = cfg['cache_folder']
@@ -66,7 +67,8 @@ backup_folder = cfg['backup_folder']
 log_folder = cfg['log_folder']
 db_file = cfg['db_file']
 db_table = cfg['db_table']
-log_level = cfg['log_level']  # 1 = separate file for every run, save all, 2 just save the latest run
+log_level = cfg['log_level']  
+cfg_colors = cfg['colors']
 
 if backup_folder == "~":
     backup_folder = f"{str(Path.home())}"
@@ -80,6 +82,18 @@ cache_folder = os.path.join(script_dir, main_folder, cache_folder)
 daily_folder = os.path.join(script_dir, main_folder, daily_folder)
 export_folder = os.path.join(script_dir, main_folder, export_folder)
 folder_list = [main_folder, tmp_folder, cache_folder, log_folder, daily_folder, export_folder]
+
+class clr:
+    if cfg_colors == "yes":
+        OK =  '\033[92m' # Something went RIGHT!
+        ER =  '\033[1m\033[91m' # Something went WRONG!
+        PR = '\x1B[3m\033[93m' # Promt/test from script
+        END = '\033[0m\x1B[0m'
+    else:
+        OK =  '' # Something went RIGHT!
+        ER =  '\033[1m' # Something went WRONG!
+        PR = '\x1B[3m' # Promt/test from script
+        END = '\033[0m\x1B[0m'
 
 """
 Adapters for sqlite datetime 
@@ -185,7 +199,8 @@ def make_backup():
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
         except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
+            log(1, " - Failed to delete %s. Reason: %s" % (file_path, e))
+            print(clr.ER + "Something went sideways!" + clr.END) 
     return f"{archive_path}.tar"
 
 
@@ -294,7 +309,7 @@ def write_file(file):
     write_any(book, chapter, part, date, the_time, tags, content)
     os.remove(file)
     log(2, " - Note written and file removed")
-    print(f"Note written to {book}/{chapter}/{part}!")   
+    print(clr.OK + f"Note written to {book}/{chapter}/{part}!" + clr.END)   
 
 
 def update_from_file(path):
@@ -354,7 +369,7 @@ def create_file(book, chapter, part, date, path):
     log(2, "create_file()")
     if os.path.exists(path.strip()):
         log(2, " - File already exists")
-        print("File found!")
+        print(clr.ER + "File allready exists!" + clr.END)
         return path
     elif not os.path.exists(path.strip()):
         the_time = "13:37:00"
@@ -404,7 +419,7 @@ def export_things_md(sql_q):
             f.close()
             log(2, f" - exported file ({i})")
             i += 1
-    print(f" Exported a total of {i} files.")
+    print(clr.OK + f" Exported a total of {i} files." + clr.END)
 
 
 def export_for_edit(the_id):
@@ -479,10 +494,10 @@ def find_old_daily():
             log(2, " - older than today")
             if len(content) < 6:
                 log(2, " - empty")
-                print("Old daily is empty - Removed")
+                print(clr.ER + "Old daily is empty - Removed" + clr.END)
                 os.remove(file)
             else:
-                print("Written old daily")
+                print(clr.OK + "Written old daily" + clr.END)
                 write_file(file)
                 log(2, " - wrote old daily file to db.")
         elif file_date == now_date:
@@ -677,7 +692,7 @@ def search_for(choice, srch_str):
             log(2, " - tags")
             result = get_things(f"SELECT * FROM '{db_table}' WHERE tags LIKE '%{srch_str}%'")
         case _:
-            print("Something went wrong!")
+            print(clr.ER + "Something went sideways!" + clr.END) 
             logging.error(f" - Did'nt get a valid case match!")
             return False
     result = print_nice(result, "short")
@@ -693,29 +708,29 @@ def create_long(book, chapter, part):
 
 def write_alias():
     alias_line = f"alias obsN='{sys.executable} {__file__}'"
-    print(alias_line)
+    print(clr.OK + alias_line + clr.END)
     print("\nThe line above is an example 'alias' line for .bashrc.")
     print("If written to your ~/.bashrc it lets you run this script with 'obsN' from anywhere.\n")
-    write_rc = input("Should I try and append this line to the end of your .bashrc? y/n > ")
+    write_rc = input(clr.PR + "Should I try and append this line to the end of your .bashrc? y/n > " + clr.END)
     if write_rc == "y" or write_rc == "Y":
         try:
             file_rc = os.path.expanduser('~')
             file_rc = f"{file_rc}/.bashrc"
-            right_path = input(f"Is this the path to your .bashrc '{file_rc}' ? y/n >")
+            right_path = input(clr.PR + f"Is this the path to your .bashrc '{file_rc}' ? y/n > " + clr.END)
             if right_path == "y" or right_path == "Y":
                 with open(file_rc, "a") as bashrc:
                     bashrc.write("\n")
                     bashrc.write(alias_line)
                     bashrc.write("\n")
-                    print("Appended alias to .bashrc\n")
+                    print(clr.OK + "Appended alias to .bashrc\n" + clr.END)
                     print("Reload .bashrc with 'source ~/.bashrc' - or reboot (= \n")
             else:
-                print("Did NOT write to .bashrc")
+                print(clr.ER + "Did NOT write to .bashrc" + clr.END)
         except OSError as error:
-            print(f"Something went sideways!")
+            print(clr.ER + "Something went sideways!" + clr.END) 
             log(1, f" - had an error! ({error})")
     else:
-        print("Did NOT write to .bashrc")
+        print(clr.ER + "Did NOT write to .bashrc" + clr.END)
 
 def first_run():
     """A function to create a folder-structure and sqlite file to use obsNotes"""
@@ -726,7 +741,7 @@ def first_run():
     first_run_log("first_run()")
     print("\nYour current config is: \n")
     pprint(cfg, width=1)
-    ok_cfg = input("\nDoes this look alright to you? y/n > ")
+    ok_cfg = input(clr.PR + "\nDoes this look alright to you? y/n > " + clr.END)
     if not ok_cfg == "y" or ok_cfg == "Y":
         write_cfg()
         print("\nCreated a config.yaml file in the same directory as the script-file.\n")
@@ -745,7 +760,7 @@ def first_run():
              '    )')
     for folder in folder_list:
         print(f"{folder}")
-    create_all = input("Should I create these folders (and database file)? y/n > ")
+    create_all = input(clr.PR + "Should I create these folders (and database file)? y/n > " + clr.END)
     if create_all == "y" or create_all == "Y":
         first_run_log(" - Create folders: YES")
         for folder in folder_list:
@@ -766,17 +781,17 @@ def first_run():
             first_run_log(f" - First row written to DB")
         except sqlite3.Error as error:
             first_run_log(f"first_run() had an except (sqlite3.error): {error}")
-        print("Created Folders and Database file! \n")
+        print(clr.OK + "Created Folders and Database file! \n" + clr.END)
         if not os.path.exists(f"{script_dir}/config.yaml"):
             first_run_log(" - No config file")
             write_cfg()
             first_run_log(" - Created config.yaml")
-            print("\nDid not find a config.yaml - Created one!\n")
+            print(clr.OK + "\nDid not find a config.yaml - Created one!\n" + clr.END)
         write_alias()
         print("\nExiting the script now, run it again to see the menu or use '-h' to see cli-commands!\n")
         sys.exit()
     else:
-        print("Did NOT create anything!\n")
+        print(clr.ER + "Did NOT create anything!\n" + clr.END)
         first_run_log(" - Did NOT create anything!")
         sys.exit()
     
@@ -785,54 +800,44 @@ def run_menu():
     """Runs the menu-driven notes system - alot of looping and code (sanitize!)"""
     log(2, "run_menu()")
 # Menu Loops
+        
     def what_parts():
-            # What book
-        books = get_books()
-        i = 0
-        print("\n")
-        for book in books:
-            i += 1
-            print(f"    {i}: {book}")
-        val1 = int(input("\n What book? ")) - 1
+        log(2, "what_parts()")
         try:
+            print("\n")
+                # What book
+            books = get_books()
+            i = 0
+            for book in books:
+                i += 1
+                print(f"    {i}: {book}")
+            val1 = int(input(clr.PR + "\n What book? " + clr.END)) - 1
             book = books[val1]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() books - {error}")
-            return
-    # What Chapter
-        chapters = get_chapters(book)
-        i = 0
-        print("\n")
-        for chapter in chapters:
-            i += 1
-            print(f"    {i}: {chapter}")
-        val2 = int(input("\n What chapter? ")) - 1
-        try:
+        # What Chapter
+            chapters = get_chapters(book)
+            i = 0
+            for chapter in chapters:
+                i += 1
+                print(f"    {i}: {chapter}")
+            val2 = int(input(clr.PR + "\n What chapter? " + clr.END)) - 1
             chapter = chapters[val2]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() chapters - {error}")
-            return
-    # What part
-        parts = get_parts(book, chapter)
-        i = 0
-        print("\n")
-        for part in parts:
-            i += 1
-            print(f"    {i}: {part}")
-        val3 = int(input("\n What part? ")) - 1
-        try:
+        # What part
+            parts = get_parts(book, chapter)
+            i = 0
+            for part in parts:
+                i += 1
+                print(f"    {i}: {part}")
+            val3 = int(input(clr.PR + "\n What part? " + clr.END)) - 1
             part = parts[val3]
-        except IndexError as error:
-            print(f"Something went sideways!")
-            log(1, f"a_loop() parts - {error}")
+            return [book, chapter, part]
+        except Exception as error:
+            print(clr.ER + "    Something went sideways!" + clr.END)
+            log(1, f"what_parts() - {error}")
             return
-        return [book, chapter, part]
 
     def q_loop():
         log(2, f"run_menu() got q")
-        print("\n Good Bye! \n")
+        print("\n" + clr.OK + "Good " + clr.PR + "Bye" + clr.ER + "!" + clr.END + "\n")
 
     def tmp_loop():
         log(2, f"run_menu() got tmp")
@@ -858,50 +863,55 @@ def run_menu():
             match val1:
                 case "e":
                     log(2, f"run_menu() - h: got e")
-                    val2 = int(input("\n What file do you want to edit? "))
+                    val2 = int(input(clr.PR + "\n What file do you want to edit? " + clr.END))
                     if len(file_list) >= val2:
                         path = file_list[val2-1]
                         os.system(editor + " " + path)
                 case "d":
                     log(2, f"run_menu() - h: got d")
-                    val2 = int(input("\n What file do you want to delete? "))
+                    val2 = int(input(clr.PR + "\n What file do you want to delete? " + clr.END))
                     if len(file_list) >= val2:
                         path = file_list[val2-1]
                         os.remove(path)
-                        print("File deleted!")
+                        print(clr.OK + "File deleted!" + clr.END)
                 case "w":
                     log(2, f"run_menu() - h: got w")
-                    val2 = int(input("\n What file do you want to write? (0 For all) "))
+                    val2 = int(input(clr.PR + "\n What file do you want to write? (0 For all) " + clr.END))
                     if val2 == 0:
                         write_all_tmp_files()
                     elif len(file_list) >= val2:
                         path = file_list[val2-1]
                         write_file(path)
                 case _:
-                    print("Something went wrong!")
+                    print(clr.ER + "Something went sideways!" + clr.END) 
                     logging.error(f"run_menu()- h: Got a choice thats not in the menu")
         else:
             print("No files found!")
             
     def a_loop():
         log(2, f"run_menu() got a")
-        parts = what_parts()
-        book = parts[0]
-        chapter = parts[1]
-        part = parts[2]
-    # Long or short
-        val4 = int(input(f"\n Do you want to add a:\n 1. Short log\n 2. Long note \n  > "))
-        if val4 == 1:
-            val5 = input(f"\n What do you want to add to {book}/{chapter}/{part}:\n  > ")
-            write_any_log(book, chapter, part, val5)
-        elif val4 == 2:
-            path = create_long(book, chapter, part)
-            os.system(editor + " " + path) 
+        try:
+            parts = what_parts()
+            book = parts[0]
+            chapter = parts[1]
+            part = parts[2]
+        # Long or short
+            val4 = int(input(clr.PR + "\n Do you want to add a:\n 1. Short log\n 2. Long note \n  > " + clr.END))
+            if val4 == 1:
+                val5 = input(clr.PR + "\n What do you want to add to {book}/{chapter}/{part}:\n  > " + clr.END)
+                write_any_log(book, chapter, part, val5)
+            elif val4 == 2:
+                path = create_long(book, chapter, part)
+                os.system(editor + " " + path) 
+        except Exception as error:
+            print(clr.ER + "    Something went sideways!" + clr.END)
+            log(1, f"a_loop() - {error}")
+            return
 
     def s_loop():
         log(2, f"run_menu() got s")
-        srch_str = input("\nWhat do you want to seach for (str)? \n >")
-        srch_in = input("\n Search in:\n t: Tags \n a: Everything \n > ")
+        srch_str = input(clr.PR + "\nWhat do you want to seach for (str)? \n > " + clr.END)
+        srch_in = input(clr.PR + "\n Search in:\n t: Tags \n a: Everything \n > " + clr.END)
         match srch_in:
             case "t":
                 choice = "tags"
@@ -910,7 +920,7 @@ def run_menu():
             case _:
                 choice = "all"
         print(search_for(choice, srch_str))
-        look_at = input("\nWant to look closer at any of them? (iD)")        
+        look_at = input(clr.PR + "Want to look closer at any of them? (iD)" + clr.END)        
         print_from_id(look_at) 
 
     def b_loop():
@@ -920,32 +930,26 @@ def run_menu():
             book = parts[0]
             chapter = parts[1]
             part = parts[2]
-    # What note
             print(get_notes(book, chapter, part))
             log(2, f"b_loop() edit/view")
-            val4 = int(input("\n 0: Edit a note\n What note id do you want to open?  "))
+            val4 = int(input(clr.PR + "\n 0: Edit a note\n What note id do you want to open?  " + clr.END))
             if val4 == 0:
                 log(2, f"b_loop() edit/view - edit")
-                val4 = int(input("\n What note id do you want to EDIT?  "))
+                val4 = int(input(clr.PR + "\n What note id do you want to EDIT?  " + clr.END))
                 path = export_for_edit(val4)
                 if path:
                     os.system(editor + " " + path)
                     print(update_from_file(path))
                     log(2, f"b_loop() edit/view - edited!")
                 else:
-                    print("Something went sideways!")
+                    print(clr.ER + "Something went sideways!" + clr.END) 
                     log(1, f"b_loop() edit/view - tried to edit a id not in db!")
             else:
                 log(2, f"b_loop() edit/view - view")
-                try:
-                    print_from_id(val4)
-                except IndexError as error:
-                    print(f"Something went sideways!")
-                    log(1, f"b_loop() view - {error}")
-                    return
-        except OSError as error:
-            print(f"Something went sideways!")
-            log(1, f"b_loop() had an error! {error}")
+                print_from_id(val4)
+        except Exception as error:
+            print(clr.ER + "    Something went sideways!" + clr.END)
+            log(1, f"b_loop() - {error}")
             return
         
     runit = 0
@@ -989,17 +993,18 @@ def run_menu():
                 log(2, f"run_menu() got l")
                 runit1 = 0
                 while runit1 == 0:
-                    input_line = input("\nLine for log ('exit' to exit) > ")
+                    input_line = input(clr.PR + "\nLine for log ('exit' to exit) > " + clr.END)
                     if input_line == "exit":
                         print("\nReturning to start!\n")
                         runit1 = 1
                     else:
                         do_it = write_log(input_line)
                         if do_it is False:
-                            print("Line must be longer than 2 char!")
+                            print(clr.ER + "Line must be longer than 2 char!" + clr.END)
+                            runit1 = 0
                         else:
-                            print("Line written")
-                        runit1 = 2     
+                            print(clr.OK + "Line written." + clr.END)
+                            runit1 = 2     
     # SEARCH TAG
             case "s":
                 s_loop()
@@ -1011,7 +1016,7 @@ def run_menu():
                 continue        
             case _:
                 logging.error(f"run_menu() did not get a viable selection in the menu!")
-                print("\nSomething went sideways, check your input!\n")
+                print(clr.ER + "\nSomething went sideways, check your input!\n" + clr.END)
                 continue
 
 
@@ -1019,9 +1024,9 @@ def main():
     log(2, "main()")
     try:
         run_menu()
-    except OSError as error:
-        print(f"Something went sideways!")
-        log(1, f" - had an error! ({error})")
+    except Exception as error:
+        print(clr.ER + "Something went sideways!" + clr.END) 
+        log(1, f"main() had an error! ({error})")
         return
 
 
@@ -1041,7 +1046,7 @@ if __name__ == "__main__":
         print("\nDid not find your DB-file!\n")
         print(f"Looked in for it here: {db_file}\n")
         print("This is eighter your first run of this script - or a catastrophic faliure!\n")
-        frst_run = input("Is this the first time you run this script (or a new installation)? y/n > ")
+        frst_run = input(clr.PR + "Is this the first time you run this script (or a new installation)? y/n > " + clr.END)
         if frst_run == "n" or frst_run == "N":
             print("\nTry and make sure your DB-file is in the above location, or modifie your config!\n")
             sys.exit()
@@ -1049,7 +1054,7 @@ if __name__ == "__main__":
             print("\nWill now run a first-run script!")
             first_run()
         else:
-            print("Something went sideways!")
+            print(clr.ER + "Something went sideways!" + clr.END) 
             sys.exit()
     
     try:
@@ -1061,12 +1066,12 @@ if __name__ == "__main__":
         open_today()
     elif args.l:
         log(2, "args.l")
-        input_line = input("\nLine for log ('exit' to exit) > ")
+        input_line = input(clr.PR + "Line for log ('exit' to exit) > " + clr.END)
         do_it = write_log(input_line)
         if do_it is False:
-            print("Line must be longer than 2 char!")
+            print(clr.ER + "Line must be longer than 2 char!" + clr.END)
         else:
-            print("Line written")
+            print(clr.OK + "Line written." + clr.END)
     elif args.m:
         run_menu()
     elif args.bu:
