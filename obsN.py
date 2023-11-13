@@ -439,7 +439,19 @@ def export_org():
                                         for tag in tags:
                                             if len(tag) > 1:
                                                 orgtags += f"{tag}:"
-                                write_data += f"**** <{note[4]} {note[5]}>     {orgtags}\n"
+                                if note[5] == "13:37":
+                                    print('found one')
+                                    time = "13:37:00"
+                                else:
+                                    time = note[5]
+                                date_obj = f"{note[4]} {time}"
+                                try:
+                                    datetime_object = datetime.datetime.strptime(date_obj, '%Y-%m-%d %H:%M:%S')
+                                except:
+                                    print('ops')
+                                datetime_object = datetime.datetime.strptime(date_obj, '%Y-%m-%d %H:%M:%S')
+                                date_and_time = datetime_object.strftime('%Y-%m-%d %a %H:%M')
+                                write_data += f"**** <{date_and_time}>     {orgtags}\n"
                                 for line in noten.splitlines():
                                     if re.match(r'^#\s{1}', line):
                                         line = re.sub(r'^#\s{1}', '***** ', line)
@@ -1029,7 +1041,7 @@ def run_menu():
                 break
     # test function
             case "tmp":
-                export_org()
+                export_org_book_file()
                 continue
     # Handle tmp-files
             case "h":
