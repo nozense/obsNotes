@@ -10,6 +10,7 @@ import random
 import argparse
 import yaml
 import shutil
+import re
 from pathlib import Path
 from pprint import pprint
 
@@ -365,7 +366,7 @@ def write_all_tmp_files():
 
 
 def create_file(book, chapter, part, date, path):
-    """Creates a file to insert longer notes to the database"""
+    """Creates a file to insert longer notess to the database"""
     log(2, "create_file()")
     if os.path.exists(path.strip()):
         log(2, " - File already exists")
@@ -395,6 +396,60 @@ def get_things(sql_q):
         return cur
     except sqlite3.Error as error:
         log(2, f"get_things() had an except (sqlite3.error): {error}")
+
+
+def export_org():
+    sql_q = f"SELECT book FROM '{db_table}'"
+    all_things = get_things(sql_q)
+    log(2, "export_org() got all things")
+    write_data = "obsNotes Export    -*- mode: org; -*-\n#+TITLE: obsNotes Export\n#+STARTUP: overview\n\n"
+    booken = ""
+    books_done = []
+    for book in all_things:
+        booken = book[0]
+        if not booken in books_done:
+            books_done.append(booken)
+            write_data += f"* {booken}\n"
+            sql_q1 = f"SELECT chapter FROM '{db_table}' WHERE book = '{booken}'"
+            book_things = get_things(sql_q1)
+            chapter_done = []
+            for chapter in book_things:
+                chapteren = chapter[0]
+                if not chapteren in chapter_done:
+                    chapter_done.append(chapteren)
+                    write_data += f"** {chapteren}\n"
+                    sql_q2 = f"SELECT part FROM '{db_table}' WHERE book = '{booken}' AND chapter = '{chapteren}'"
+                    chapter_things = get_things(sql_q2)
+                    part_done = []
+                    for part in chapter_things:
+                        parten = part[0]
+                        if not parten in part_done:
+                            part_done.append(parten)
+                            write_data += f"*** {parten}\n"
+                            sql_q3 = f"SELECT * FROM '{db_table}' WHERE book = '{booken}' AND chapter = '{chapteren}' AND part = '{parten}'"
+                            part_things = get_things(sql_q3)
+                            for note in part_things:
+                                noten = note[7]
+                                tags = note[6]
+                                orgtags = ""
+                                if tags:
+                                    tags = tags.split(";")
+                                    if len(tags) > 1:
+                                        orgtags = ":"
+                                        for tag in tags:
+                                            if len(tag) > 1:
+                                                orgtags += f"{tag}:"
+                                write_data += f"**** <{note[4]} {note[5]}>     {orgtags}\n"
+                                for line in noten.splitlines():
+                                    if re.match(r'^#\s{1}', line):
+                                        line = re.sub(r'^#\s{1}', '***** ', line)
+                                    write_data += f"{line}\n"
+    now_date = get_date()
+    the_file = f"obsNotes_export_{now_date}.org"
+    path = os.path.join(export_folder, the_file)
+    f = open(path, "w", encoding="utf-8")
+    f.write(write_data)
+    f.close()
 
 
 def export_things_md(sql_q):
@@ -964,7 +1019,8 @@ def run_menu():
         s Search
         b Browser DB
         h Handle tmp-files
-
+        md Backup to md-files
+        org Backup as org-mode
         > """)
         match selector1:
             # QUIT
@@ -973,7 +1029,7 @@ def run_menu():
                 break
     # test function
             case "tmp":
-                tmp_loop()
+                export_org()
                 continue
     # Handle tmp-files
             case "h":
@@ -1013,7 +1069,14 @@ def run_menu():
             case "o":
                 log(2, f"run_menu() got o")
                 open_today()
-                continue        
+                continue
+            case "md":
+                file_path = make_backup()
+                print(f"Backup (as markdown files) saved to your home folder ({file_path}).\n To backup the DB (as is) just copy the '{db_file}' file.")
+                continue 
+            case "org":
+                export_org()
+                continue       
             case _:
                 logging.error(f"run_menu() did not get a viable selection in the menu!")
                 print(clr.ER + "\nSomething went sideways, check your input!\n" + clr.END)
@@ -1034,7 +1097,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-o", help="Open Daily-file", action="store_true")
 parser.add_argument("-l", help="Write quick log-line", action="store_true")
 parser.add_argument("-m", help="Run the menu", action="store_true")
-parser.add_argument("-bu", help="Make backup to single archive in ~/", action="store_true")
+
 
 
 args = parser.parse_args()
@@ -1074,9 +1137,6 @@ if __name__ == "__main__":
             print(clr.OK + "Line written." + clr.END)
     elif args.m:
         run_menu()
-    elif args.bu:
-        file_path = make_backup()
-        print(f"Backup (as markdown files) saved to your home folder ({file_path}).\n To backup the DB (as is) just copy the '{db_file}' file.")
     else:
         log(2, "No args")
         main()
